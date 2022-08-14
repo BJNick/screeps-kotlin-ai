@@ -6,9 +6,18 @@ import screeps.api.structures.StructureController
 
 enum class Role {
     UNASSIGNED,
+    SETTLER,
     HARVESTER,
     BUILDER,
     UPGRADER,
+}
+
+fun Creep.settle() {
+    if (isCollecting()) {
+        collectEnergy()
+    } else {
+        putEnergy(findEnergyTarget(room))
+    }
 }
 
 fun Creep.upgrade(controller: StructureController) {
