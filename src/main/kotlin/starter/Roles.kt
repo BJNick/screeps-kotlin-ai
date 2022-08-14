@@ -8,12 +8,20 @@ enum class Role {
     UNASSIGNED,
     HARVESTER,
     BUILDER,
-    UPGRADER
+    UPGRADER,
 }
 
 fun Creep.upgrade(controller: StructureController) {
+    if (!memory.collecting && store[RESOURCE_ENERGY] == 0) {
+        memory.collecting = true
+        say("🔄 harvest")
+    }
+    if (memory.collecting && store[RESOURCE_ENERGY] == store.getCapacity()) {
+        memory.collecting = false
+        say("⬆ upgrade")
+    }
 
-    if (store[RESOURCE_ENERGY] == 0) {
+    if (memory.collecting) {
         val sources = room.find(FIND_SOURCES)
         if (harvest(sources[0]) == ERR_NOT_IN_RANGE) {
             moveTo(sources[0].pos)
@@ -37,16 +45,16 @@ fun Creep.pause() {
 }
 
 fun Creep.build(assignedRoom: Room = this.room) {
-    if (memory.building && store[RESOURCE_ENERGY] == 0) {
-        memory.building = false
+    if (!memory.collecting && store[RESOURCE_ENERGY] == 0) {
+        memory.collecting = true
         say("🔄 harvest")
     }
-    if (!memory.building && store[RESOURCE_ENERGY] == store.getCapacity()) {
-        memory.building = true
+    if (memory.collecting && store[RESOURCE_ENERGY] == store.getCapacity()) {
+        memory.collecting = false
         say("🚧 build")
     }
 
-    if (memory.building) {
+    if (!memory.collecting) {
         val targets = assignedRoom.find(FIND_MY_CONSTRUCTION_SITES)
         if (targets.isNotEmpty()) {
             if (build(targets[0]) == ERR_NOT_IN_RANGE) {
@@ -68,15 +76,18 @@ fun Creep.harvest(fromRoom: Room = this.room, toRoom: Room = this.room) {
             moveTo(sources[0].pos)
         }
     } else {
-        val targets = toRoom.find(FIND_MY_STRUCTURES)
+        val targets = toRoom.find(FIND_STRUCTURES)
             .filter { (it.structureType == STRUCTURE_EXTENSION || it.structureType == STRUCTURE_SPAWN) }
             .map { it.unsafeCast<StoreOwner>() }
-            .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity() }
+            //.also { console.log(it.map { it.store[RESOURCE_ENERGY].toString() + " out of " + it.store.getCapacity(RESOURCE_ENERGY) }.joinToString()) }
+            .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
 
         if (targets.isNotEmpty()) {
             if (transfer(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
                 moveTo(targets[0].pos)
             }
+        } else {
+            say("No dest")
         }
     }
 }

@@ -37,21 +37,21 @@ fun gameLoop() {
     for ((_, room) in Game.rooms) {
         if (room.energyAvailable >= 550) {
             mainSpawn.spawnCreep(
-                    arrayOf(
-                            WORK,
-                            WORK,
-                            WORK,
-                            WORK,
-                            CARRY,
-                            MOVE,
-                            MOVE
-                    ),
-                    "HarvesterBig_${Game.time}",
-                    options {
-                        memory = jsObject<CreepMemory> {
-                            this.role = Role.HARVESTER
-                        }
+                arrayOf(
+                    WORK,
+                    WORK,
+                    WORK,
+                    WORK,
+                    CARRY,
+                    MOVE,
+                    MOVE
+                ),
+                "HarvesterBig_${Game.time}",
+                options {
+                    memory = jsObject<CreepMemory> {
+                        this.role = Role.HARVESTER
                     }
+                }
             )
             console.log("hurray!")
         }
@@ -69,8 +69,8 @@ fun gameLoop() {
 }
 
 private fun spawnCreeps(
-        creeps: Array<Creep>,
-        spawn: StructureSpawn
+    creeps: Array<Creep>,
+    spawn: StructureSpawn
 ) {
 
     val body = arrayOf<BodyPartConstant>(WORK, CARRY, MOVE)

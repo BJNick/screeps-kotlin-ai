@@ -8,7 +8,7 @@ import screeps.utils.memory.memory
 * i.e. creep.memory.building = true */
 
 /* Creep.memory */
-var CreepMemory.building: Boolean by memory { false }
+var CreepMemory.collecting: Boolean by memory { false }
 var CreepMemory.pause: Int by memory { 0 }
 var CreepMemory.role by memory(Role.UNASSIGNED)
 
@@ -21,13 +21,13 @@ var CreepMemory.role by memory(Role.UNASSIGNED)
    see https://docs.screeps.com/power.html for more details.
    This set sets up the memory for the PowerCreep.memory class.
  */
-var PowerCreepMemory.test : Int by memory { 0 }
+//var PowerCreepMemory.test: Int by memory { 0 }
 
 /* flag.memory */
-var FlagMemory.test : Int by memory { 0 }
+//var FlagMemory.test: Int by memory { 0 }
 
 /* room.memory */
-var RoomMemory.numberOfCreeps : Int by memory { 0 }
+var RoomMemory.numberOfCreeps: Int by memory { 0 }
 
 /* spawn.memory */
-var SpawnMemory.test : Int by memory { 0 }
+//var SpawnMemory.test: Int by memory { 0 }
