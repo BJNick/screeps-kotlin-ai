@@ -104,13 +104,13 @@ tasks.register("deploy") {
          *
          */
         val url = URL("$host/api/user/code")
-        if (skipSsl){
+        if (skipSsl) {
             val ctx = SSLContext.getInstance("TLS")
-            ctx.init(null, arrayOf(TrustAllTrustManager) , SecureRandom())
+            ctx.init(null, arrayOf(TrustAllTrustManager), SecureRandom())
             HttpsURLConnection.setDefaultSSLSocketFactory(ctx.socketFactory)
         }
         val connection: HttpsURLConnection = url.openConnection() as HttpsURLConnection
-        if(skipSsl){
+        if (skipSsl) {
             connection.hostnameVerifier = HostnameVerifier { _, _ -> true } // accept all
         }
         connection.doOutput = true

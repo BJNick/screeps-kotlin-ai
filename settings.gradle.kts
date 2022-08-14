@@ -1,1 +1,1 @@
-rootProject.name = "screeps-kotlin-starter"
+rootProject.name = "screeps-kotlin-ai"

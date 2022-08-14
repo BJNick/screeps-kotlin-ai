@@ -52,10 +52,17 @@ fun Creep.putEnergy(target: HasPosition?) {
     }
 
     if (err == ERR_NOT_IN_RANGE) {
-        when (target) {
-            is Structure -> moveTo(target.pos)
-            is ConstructionSite -> moveTo(target.pos)
-        }
+        moveTo(target.pos)
+    } else if (err != OK) {
+        logError("putEnergy: error $err")
+    }
+}
+
+fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function: String = "moveIfNotInRange") {
+    if (err == ERR_NOT_IN_RANGE) {
+        moveTo(target.pos)
+    } else if (err != OK) {
+        logError("$function: error $err")
     }
 }
 

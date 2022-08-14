@@ -36,7 +36,8 @@ private fun spawnCreeps(
     spawn: StructureSpawn
 ) {
 
-    val body = arrayOf<BodyPartConstant>(WORK, CARRY, MOVE)
+    //val body = arrayOf<BodyPartConstant>(WORK, CARRY, MOVE)
+    val body = bestMultipurpose(spawn.room.energyCapacityAvailable)
 
     if (spawn.room.energyAvailable < body.sumOf { BODYPART_COST[it]!! }) {
         return
