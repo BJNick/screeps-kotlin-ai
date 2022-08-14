@@ -1,4 +1,4 @@
-package starter
+package bjnick
 
 import screeps.api.*
 import screeps.utils.memory.memory
@@ -9,8 +9,8 @@ import screeps.utils.memory.memory
 
 /* Creep.memory */
 var CreepMemory.collecting: Boolean by memory { false }
-var CreepMemory.pause: Int by memory { 0 }
 var CreepMemory.role by memory(Role.UNASSIGNED)
+var CreepMemory.distributesEnergy: Boolean by memory { false }
 
 
 /* Rest of the persistent memory structures.

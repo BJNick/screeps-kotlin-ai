@@ -1,5 +1,5 @@
 import screeps.api.*
-import starter.bestWorker
+import bjnick.bestWorker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
