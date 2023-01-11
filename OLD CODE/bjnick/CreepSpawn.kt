@@ -1,4 +1,6 @@
 package bjnick
+import distributesEnergy
+import role
 import screeps.api.*
 import screeps.api.structures.StructureSpawn
 import screeps.utils.unsafe.jsObject

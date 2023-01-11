@@ -1,5 +1,7 @@
 package bjnick
 
+import numberOfCreeps
+import role
 import screeps.api.*
 import screeps.api.structures.StructureSpawn
 import screeps.utils.isEmpty
