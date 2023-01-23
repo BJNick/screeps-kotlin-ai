@@ -4,16 +4,27 @@ import screeps.api.*
 import targetID
 
 
+
 interface HasPriority {
     val priority: Int
 }
 
-interface CarryingEnergy {
-    val energyCarried : Int
+interface FeedTarget {
+    val id: String
+    val freeCapacity: Int
 }
 
-val Creep.energyCarried : Int
-    get() = this.store[RESOURCE_ENERGY] ?: 0
+/** An abstraction of a creep carrying some energy */
+open class CreepCarryingEnergy(val creep: Creep? = null, private val _energyCarried: Int? = null) {
+    open val energyCarried : Int = creep?.store?.getUsedCapacity(RESOURCE_ENERGY) ?: _energyCarried ?: 0
+    override fun toString(): String = "CreepCarryingEnergy($energyCarried)"
+}
+
+/** An abstraction of a creep carrying some energy and having a targetID feed task */
+open class CreepWithTask(creep: Creep? = null): CreepCarryingEnergy(creep) {
+    open val targetID: String = creep?.memory?.targetID ?: "debugTargetID"
+}
+
 
 /** An order to surround the source with miners, up to the numberOfCreeps */
 class SourceOrder(val source: Source, val numberOfCreeps: Int, override val priority: Int) : HasPriority
@@ -51,9 +62,9 @@ open class FeedOrder (
 }
 
 /** Creates a feed order from the store owner */
-class ConcreteFeedOrder(storeOwner: StoreOwner, priority: Int) : FeedOrder(
-    storeOwner.store.getFreeCapacity(),
-    storeOwner.id,
+class ConcreteFeedOrder(feedTarget: FeedTarget, priority: Int) : FeedOrder(
+    feedTarget.freeCapacity,
+    feedTarget.id,
     priority
 )
 
@@ -68,16 +79,20 @@ open class AssignedFeedTask(
 }
 
 /** Creates a feed task from a creep's memory */
-class CreepAssignedFeedTask(creep: Creep) : AssignedFeedTask(
-    creep.memory.targetID,
+class CreepAssignedFeedTask(creep: CreepWithTask) : AssignedFeedTask(
+    creep.targetID,
     creep.energyCarried
 )
 
 
+/** Sort by priority */
+fun <T : HasPriority> sortByPriority(listOfOrders: List<T>): List<T> {
+    return listOfOrders.sortedBy { -it.priority } // descending
+}
 
 /** Sort by priority and return top N */
 fun <T : HasPriority> getTopNOrders(orders: List<T>, n: Int): List<T> {
-    return orders.sortedBy { it.priority }.take(n)
+    return sortByPriority(orders).take(n)
 }
 
 /** Filters out full containers from feed orders */
@@ -86,13 +101,13 @@ fun filterOutFull(listOfOrders: List<FeedOrder>): List<FeedOrder> {
 }
 
 /** Filters out creeps with empty inventories */
-fun <T : CarryingEnergy> filterOutEmpty(listOfCreeps: List<T>): List<T> {
+fun <T : CreepCarryingEnergy> filterOutEmpty(listOfCreeps: List<T>): List<T> {
     return listOfCreeps.filter { it.energyCarried > 0 }
 }
 
 
 /** Assigns a list of creeps with energy to feed orders, considering the priority and capacity  */
-fun <T : CarryingEnergy> assignCreepsToFeed(creepList: List<T>, orders: List<FeedOrder>): List<Pair<T, FeedOrder>> {
+fun <T : CreepCarryingEnergy> assignCreepsToFeed(creepList: List<T>, orders: List<FeedOrder>): List<Pair<T, FeedOrder>> {
     val ordersSortedByPriority = orders.sortedBy { it.priority }
     val creepListSortedByEnergyCarried = filterOutEmpty(creepList).sortedBy { it.energyCarried }.reversed()
     // Assign creeps to an order until it fills up, then move on to next order

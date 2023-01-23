@@ -1,18 +1,17 @@
 import functional.*
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class OrdersTest {
 
-    class FakeCreep(override val energyCarried: Int) : CarryingEnergy {
+    class FakeCreep(override val energyCarried: Int) : CreepCarryingEnergy() {
         override fun toString(): String = "Creep(energyCarried=$energyCarried)"
     }
 
     @Test
     fun testAssignCreepsToFeed() {
         // Test assignCreepsToFeed function
-        val carryingEnergyList = mutableListOf<CarryingEnergy>()
+        val carryingEnergyList = mutableListOf<CreepCarryingEnergy>()
         carryingEnergyList.add(FakeCreep(20))
         carryingEnergyList.add(FakeCreep(40))
         carryingEnergyList.add(FakeCreep(100))

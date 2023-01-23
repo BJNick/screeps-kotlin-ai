@@ -4,6 +4,11 @@ import screeps.api.*
 import screeps.api.structures.*
 import kotlin.math.min
 
+class Spawn(val structure: StructureSpawn? = null) : FeedTarget {
+    override val id: String = structure?.id ?: "debugSpawnID"
+    override val freeCapacity: Int = structure?.store?.getFreeCapacity() ?: 300
+}
+
 /** Abstract representation of a creep body part */
 enum class BodyPart {
     MOVE, WORK, CARRY, ATTACK, RANGED_ATTACK, HEAL, CLAIM, TOUGH
@@ -40,12 +45,23 @@ fun asBodyConstants(body: Array<BodyPart>): Array<BodyPartConstant> {
     return body.map { asBodyConstant(it) }.toTypedArray()
 }
 
-
-
-fun getSpawnList(): List<StructureSpawn> {
-    // provided information, no cost
-    return Game.spawns.values.toList()
+/** Returns a blank SpawnOptions */
+fun blankSpawnOptions(): SpawnOptions {
+    return object: SpawnOptions {
+        override var directions: Array<DirectionConstant>? = null
+        override var dryRun: Boolean? = false
+        override var energyStructures: Array<StoreOwner>? = null
+        override var memory: CreepMemory? = null
+    }
 }
+
+
+fun getSpawnList(): List<Spawn> {
+    if (DEBUG_MODE) return listOf(Spawn())
+    // provided information, no cost
+    return Game.spawns.values.map { Spawn(it) }
+}
+
 
 fun getEnergyCapacityAvailable(room: Room): Int = room.energyCapacityAvailable
 
@@ -63,6 +79,10 @@ class SpawnCommand(val body: Array<BodyPart>, val name: String, val spawnOptions
         return body.count { it == bodyPartType }
     }
 
+    override fun toString(): String {
+        return "SpawnCommand(body=$body, name='$name', spawnOptions=$spawnOptions)"
+    }
+
 }
 
 /** Generates a new name for a creep */
@@ -73,8 +93,8 @@ fun makeName(role: String, id: Int): String {
 /** For every spawn, assign a spawn command */
 fun assignSpawns(
     spawnCommands: List<SpawnCommand>,
-    spawnStructures: List<StructureSpawn>
-): List<Pair<StructureSpawn, SpawnCommand>> {
+    spawnStructures: List<Spawn>
+): List<Pair<Spawn, SpawnCommand>> {
     // find minimum length between the two lists
     val minListLength = min(spawnCommands.size, spawnStructures.size)
     // pair them up
