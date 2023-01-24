@@ -7,7 +7,7 @@ var DEBUG_MODE: Boolean = false
 
 
 fun getCarryingCreeps(): List<CreepCarryingEnergy> {
-    if (DEBUG_MODE) return listOf(CreepCarryingEnergy(_energyCarried = 100))
+    if (DEBUG_MODE) return listOf(CreepCarryingEnergy(energyCarried=100))
     return Game.creeps.values.toList().map { CreepCarryingEnergy(it) }
 }
 
@@ -16,7 +16,7 @@ fun gameLoop() {
 
     val mainSpawn: Spawn = getSpawnList().firstOrNull() ?: throw IllegalStateException("No spawn found")
 
-    val feedOrders = listOf( ConcreteFeedOrder(mainSpawn, 100) )
+    val feedOrders = listOf( feedOrderFromStoreOwner(mainSpawn, 100) )
 
     val creeps = getCarryingCreeps()
 
@@ -39,9 +39,19 @@ fun gameLoop() {
     }
 
     // Execute feed orders
-    val feedAssignments = assignCreepsToFeed(creeps, feedOrders)
+    val feedAssignments = assignCreepsToFeed(creeps, feedOrders) // TODO Subtract already assigned
     feedAssignments.forEach { (creep, order) ->
-        executeFeedOrder(creep, order)  // SIDE EFFECT: sets creep memory
+        assignFeedOrder(creep, order)  // SIDE EFFECT: sets creep memory
+        executeTransfer(creep, order)  // SIDE EFFECT: transfers energy to target (if possible)
+    }
+
+    // Execute collect orders
+    val collectOrders = emptyList<CollectOrder>()
+
+    val collectAssignments = assignCreepsToCollect(creeps, collectOrders) // TODO Subtract already assigned
+    collectAssignments.forEach { (creep, order) ->
+        assignCollectOrder(creep, order)  // SIDE EFFECT: sets creep memory
+        executeCollection(creep, order)  // SIDE EFFECT: withdraws energy from target (if possible)
     }
 
 
