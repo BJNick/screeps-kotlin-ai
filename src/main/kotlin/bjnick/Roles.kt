@@ -1,14 +1,26 @@
 package bjnick
 
+import role
 import screeps.api.*
 
-enum class Role {
-    UNASSIGNED,
-    SETTLER,
-    CARRIER,
-    HARVESTER,
-    BUILDER,
-    UPGRADER,
+object Role {
+    val UNASSIGNED = "UNASSIGNED"
+    val SETTLER = "SETTLER"
+    val CARRIER = "CARRIER"
+    val HARVESTER = "HARVESTER"
+    val BUILDER = "BUILDER"
+    val UPGRADER = "UPGRADER"
+}
+
+fun Creep.executeRole() {
+    when (memory.role) {
+        Role.UNASSIGNED -> console.log("Unassigned role: $name")
+        Role.SETTLER -> settler()
+        Role.CARRIER -> carrier()
+        Role.HARVESTER -> harvester()
+        Role.BUILDER -> builder()
+        Role.UPGRADER -> upgrader()
+    }
 }
 
 fun Creep.settler() {

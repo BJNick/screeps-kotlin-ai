@@ -1,4 +1,4 @@
-import functional.gameLoop
+import bjnick.gameLoop
 
 /**
  * Entry point

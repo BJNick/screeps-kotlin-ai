@@ -60,7 +60,7 @@ fun spawnCreeps(
 
     val capacity = spawn.room.energyCapacityAvailable
 
-    val (role: Role, body: bodyArray) = when {
+    val (role: String, body: bodyArray) = when {
 
         creeps.count { it.memory.role == Role.SETTLER } < 3 -> Pair(Role.SETTLER, bestMultipurpose(capacity))
 
@@ -80,7 +80,7 @@ fun spawnCreeps(
         return
     }
 
-    val newName = "${role.name}_${Game.time}"
+    val newName = "${role}_${Game.time}"
     val code = spawn.spawnCreep(body, newName, options {
         memory = jsObject<CreepMemory> { this.role = role; this.distributesEnergy = role == Role.BUILDER || role == Role.UPGRADER }
     })

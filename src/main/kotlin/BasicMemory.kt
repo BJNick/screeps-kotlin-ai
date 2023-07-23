@@ -1,4 +1,5 @@
 
+import bjnick.Role
 import screeps.api.*
 import screeps.utils.memory.memory
 
@@ -8,7 +9,7 @@ import screeps.utils.memory.memory
 
 /* Creep.memory */
 var CreepMemory.collecting: Boolean by memory { false }
-var CreepMemory.role by memory { "" } // was Role.UNASSIGNED
+var CreepMemory.role: String by memory { "" }
 var CreepMemory.distributesEnergy: Boolean by memory { false }
 
 var CreepMemory.targetID : String by memory { "" }

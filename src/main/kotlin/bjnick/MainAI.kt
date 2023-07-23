@@ -27,13 +27,7 @@ fun gameLoop() {
     spawnCreeps(Game.creeps.values, mainSpawn)
 
     for ((_, creep) in Game.creeps) {
-        when (creep.memory.role) {
-            Role.SETTLER -> creep.settler()
-            Role.HARVESTER -> creep.harvester()
-            Role.CARRIER -> creep.carrier()
-            Role.BUILDER -> creep.builder()
-            Role.UPGRADER -> creep.upgrader()
-        }
+        creep.executeRole()
     }
 
 }
