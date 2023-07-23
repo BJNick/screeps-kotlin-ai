@@ -88,4 +88,3 @@ fun Room.assignSource(creep: Creep, source: Source) {
     // TODO: deal with dead creeps
 }
 
-

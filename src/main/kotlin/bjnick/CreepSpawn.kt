@@ -51,7 +51,15 @@ fun bestMultipurpose(maxEnergy: Int): bodyArray {
     }}
 }
 
-
+// Make a name based on tick and role
+fun newName(role: String): String {
+    // Ticks should be converted to letters: any, vowel, any
+    val tick = Game.time % 26
+    val tick2 = (Game.time / 26) % 5
+    val tick3 = (Game.time / 26 / 5) % 26
+    val tickName = "${"abcdefghijklmnopqrstuvwxyz"[tick3]}${"aeiou"[tick2]}${"abcdefghijklmnopqrstuvwxyz"[tick]}"
+    return "${role.lowercase().capitalize()}-${tickName.capitalize()}"
+}
 
 fun spawnCreeps(
     creeps: Array<Creep>,
@@ -60,9 +68,11 @@ fun spawnCreeps(
 
     val capacity = spawn.room.energyCapacityAvailable
 
+    val harvesterCount = spawn.room.optimalHarvesters(1)
+
     val (role: String, body: bodyArray) = when {
 
-        creeps.count { it.memory.role == Role.SETTLER } < 3 -> Pair(Role.SETTLER, bestMultipurpose(capacity))
+        creeps.count { it.memory.role == Role.SETTLER } < harvesterCount -> Pair(Role.SETTLER, bestMultipurpose(capacity))
 
         creeps.count { it.memory.role == Role.CARRIER } < 3 -> Pair(Role.CARRIER, bestOffRoad(capacity))
 
@@ -80,7 +90,7 @@ fun spawnCreeps(
         return
     }
 
-    val newName = "${role}_${Game.time}"
+    val newName = newName(role)
     val code = spawn.spawnCreep(body, newName, options {
         memory = jsObject<CreepMemory> { this.role = role; this.distributesEnergy = role == Role.BUILDER || role == Role.UPGRADER }
     })
