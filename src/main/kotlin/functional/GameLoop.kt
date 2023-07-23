@@ -19,9 +19,9 @@ fun scrapeEnvironment(room: Room) {
     // make . = empty, W = wall, X = swamp, S = source, M = mineral, C = controller
     // needs to be AND & with TERRAIN_MASK_WALL or TERRAIN_MASK_SWAMP
     val buffer = rawBuffer.map{
-        if (it and TERRAIN_MASK_WALL.value > 0) 'W'
-        else if (it and TERRAIN_MASK_SWAMP.value > 0) 'X'
-        else '.'
+        if (it and TERRAIN_MASK_WALL.value > 0) "W"
+        else if (it and TERRAIN_MASK_SWAMP.value > 0) "X"
+        else "."
     }
     // Now add the sources and minerals
     val sources = room.find(FIND_SOURCES)
@@ -31,16 +31,14 @@ fun scrapeEnvironment(room: Room) {
         return pos.y * 50 + pos.x
     }
     val bufferUpdated = buffer.mapIndexed { index, c ->
-        val pos = room.getPositionAt(index % 50, index / 50) ?:
-            throw IllegalStateException("Could not get position at index $index")
         when {
-            sources.any { it.pos == pos } -> 'S'
-            minerals.any { it.pos == pos } -> 'M'
-            controller?.pos == pos -> 'C'
+            sources.any { getLinearIndex(it.pos) == index } -> "S" // Source
+            minerals.any { getLinearIndex(it.pos) == index } -> "M" // Mineral
+            controller?.let { getLinearIndex(it.pos) == index } ?: false -> "C" // Controller
             else -> c
         }
     }
-    // Send string to console
+    // Send string to console, make sure to convert to characters first
     val bufferString = bufferUpdated.joinToString("")
     console.log(bufferString)
     room.memory.collectData = false // Don't collect data again
@@ -51,8 +49,6 @@ fun gameLoop() {
 
     val mainSpawn: Spawn = getSpawnList().firstOrNull() ?: throw IllegalStateException("No spawn found")
 
-
-    console.log("Game loop running")
     if (mainSpawn.structure?.room?.memory?.collectData == true) {
         scrapeEnvironment(mainSpawn.structure.room)
     }
