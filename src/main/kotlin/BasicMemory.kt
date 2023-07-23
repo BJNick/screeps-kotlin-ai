@@ -30,5 +30,7 @@ var CreepMemory.targetTask : String by memory { "" }
 /* room.memory */
 var RoomMemory.numberOfCreeps: Int by memory { 0 }
 
+var RoomMemory.collectData: Boolean by memory { false }
+
 /* spawn.memory */
 //var SpawnMemory.test: Int by memory { 0 }

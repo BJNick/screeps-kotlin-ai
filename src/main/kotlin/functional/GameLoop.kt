@@ -1,10 +1,9 @@
 package functional
 
-import screeps.api.Game
-import screeps.api.values
+import collectData
+import screeps.api.*
 
 var DEBUG_MODE: Boolean = false
-
 
 fun getCarryingCreeps(): List<CreepCarryingEnergy> {
     if (DEBUG_MODE) return listOf(CreepCarryingEnergy(energyCarried=100))
@@ -12,9 +11,51 @@ fun getCarryingCreeps(): List<CreepCarryingEnergy> {
 }
 
 
+fun scrapeEnvironment(room: Room) {
+    // Save the room tile data as well as sources and minerals locations
+    // Save the room structure data as well as controller location
+    // Save the buffer as a string
+    val rawBuffer = room.getTerrain().getRawBuffer()
+    // make . = empty, W = wall, X = swamp, S = source, M = mineral, C = controller
+    // needs to be AND & with TERRAIN_MASK_WALL or TERRAIN_MASK_SWAMP
+    val buffer = rawBuffer.map{
+        if (it and TERRAIN_MASK_WALL.value > 0) 'W'
+        else if (it and TERRAIN_MASK_SWAMP.value > 0) 'X'
+        else '.'
+    }
+    // Now add the sources and minerals
+    val sources = room.find(FIND_SOURCES)
+    val minerals = room.find(FIND_MINERALS)
+    val controller = room.controller
+    fun getLinearIndex(pos: RoomPosition): Int {
+        return pos.y * 50 + pos.x
+    }
+    val bufferUpdated = buffer.mapIndexed { index, c ->
+        val pos = room.getPositionAt(index % 50, index / 50) ?:
+            throw IllegalStateException("Could not get position at index $index")
+        when {
+            sources.any { it.pos == pos } -> 'S'
+            minerals.any { it.pos == pos } -> 'M'
+            controller?.pos == pos -> 'C'
+            else -> c
+        }
+    }
+    // Send string to console
+    val bufferString = bufferUpdated.joinToString("")
+    console.log(bufferString)
+    room.memory.collectData = false // Don't collect data again
+}
+
+
 fun gameLoop() {
 
     val mainSpawn: Spawn = getSpawnList().firstOrNull() ?: throw IllegalStateException("No spawn found")
+
+
+    console.log("Game loop running")
+    if (mainSpawn.structure?.room?.memory?.collectData == true) {
+        scrapeEnvironment(mainSpawn.structure.room)
+    }
 
     val feedOrders = listOf( feedOrderFromStoreOwner(mainSpawn, 100) )
 
