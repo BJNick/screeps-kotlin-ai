@@ -1,5 +1,6 @@
 package bjnick
 
+import assignedSource
 import collecting
 import distributesEnergy
 import role
@@ -20,11 +21,20 @@ fun Creep.isCollecting(): Boolean {
     return memory.collecting
 }
 
+fun Creep.assignedSource(): Source {
+    if (memory.assignedSource != "") {
+        return Game.getObjectById(memory.assignedSource) ?: throw RuntimeException("No source found")
+    }
+    val source = room.pickSourceForHarvester(this)
+    room.assignSource(this, source)
+    return source
+}
 
 fun Creep.collectFromASource(fromRoom: Room = this.room) {
-    val sources = fromRoom.find(FIND_SOURCES)
-    if (harvest(sources[0]) == ERR_NOT_IN_RANGE) {
-        moveTo(sources[0].pos)
+    //val source = fromRoom.find(FIND_SOURCES)[0]
+    val source = assignedSource()
+    if (harvest(source) == ERR_NOT_IN_RANGE) {
+        moveTo(source.pos)
     }
 }
 

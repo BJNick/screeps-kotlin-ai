@@ -30,6 +30,8 @@ fun gameLoop() {
         creep.executeRole()
     }
 
+    mainSpawn.room.visualizeSources()
+
 }
 
 private fun houseKeeping(creeps: Record<String, Creep>) {
