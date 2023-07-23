@@ -1,5 +1,7 @@
 package bjnick
 
+import assignedSource
+import collecting
 import role
 import screeps.api.*
 
@@ -13,6 +15,7 @@ object Role {
 }
 
 fun Creep.executeRole() {
+    if (this.spawning) return
     when (memory.role) {
         Role.UNASSIGNED -> console.log("Unassigned role: $name")
         Role.SETTLER -> settler()
@@ -25,10 +28,12 @@ fun Creep.executeRole() {
 
 fun Creep.settler() {
     if (isCollecting()) {
-        collectFromASource()
+        // collectFromASource() // TODO repurposed settlers
+        if (this.memory.assignedSource != "") unassignSource(name)
+        this.memory.role = "BUILDER"
     } else {
-        if (!ProgressState.carriersPresent)
-            putEnergy(findEnergyTarget(room))
+        //if (!ProgressState.carriersPresent)
+        putEnergy(findEnergyTarget(room))
     }
 }
 
@@ -51,13 +56,15 @@ fun Creep.harvester() {
     } else {
         if (!ProgressState.carriersPresent)
             putEnergy(findEnergyTarget(room))
+        else if (!memory.collecting && store[RESOURCE_ENERGY] < store.getCapacity())
+            memory.collecting = true // keep collecting even if not fully emptied
     }
 }
 
 fun Creep.builder() {
     if (isCollecting()) {
-        if (!ProgressState.carriersPresent)
-            collectFromASource() // TODO
+        //if (!ProgressState.carriersPresent)
+        collectFromClosest() // TODO
     } else {
         putEnergy(getConstructionSites(room).firstOrNull())
     }
@@ -65,8 +72,8 @@ fun Creep.builder() {
 
 fun Creep.upgrader() {
     if (isCollecting()) {
-        if (!ProgressState.carriersPresent)
-            collectFromASource() // TODO
+        //if (!ProgressState.carriersPresent)
+        collectFromClosest() // TODO
     } else {
         putEnergy(room.controller)
     }

@@ -43,6 +43,8 @@ var RoomMemory.sourceIDs: Array<String> by memory { arrayOf() }
 var RoomMemory.sourceHarvesterSpaces: Array<Int> by memory { arrayOf() }
 var RoomMemory.sourceAssignedHarvesters: Array<Array<String>> by memory { arrayOf() }
 
+var Memory.forceReassignSources: Boolean by memory { false }
+
 /* spawn.memory */
 //var SpawnMemory.test: Int by memory { 0 }
 

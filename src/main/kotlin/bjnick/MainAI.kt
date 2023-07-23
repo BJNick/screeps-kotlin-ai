@@ -1,5 +1,6 @@
 package bjnick
 
+import forceReassignSources
 import numberOfCreeps
 import role
 import screeps.api.*
@@ -32,6 +33,12 @@ fun gameLoop() {
 
     mainSpawn.room.visualizeSources()
 
+    if (Memory.forceReassignSources) {
+        for ((creepName, _) in Memory.creeps) {
+            unassignSource(creepName)
+        }
+        Memory.forceReassignSources = false
+    }
 }
 
 private fun houseKeeping(creeps: Record<String, Creep>) {
@@ -40,6 +47,7 @@ private fun houseKeeping(creeps: Record<String, Creep>) {
     for ((creepName, _) in Memory.creeps) {
         if (creeps[creepName] == null) {
             console.log("deleting obsolete memory entry for creep $creepName")
+            unassignSource(creepName)
             delete(Memory.creeps[creepName])
         }
     }

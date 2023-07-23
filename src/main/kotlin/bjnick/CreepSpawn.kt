@@ -31,6 +31,13 @@ fun bestOffRoad(maxEnergy: Int): bodyArray {
     }}
 }
 
+fun bestOnRoad(maxEnergy: Int): bodyArray {
+    val maxSmallParts = maxEnergy / 50
+    return Array(maxSmallParts) { i -> when (i%3) {
+        0 -> MOVE
+        else -> CARRY
+    }}
+}
 
 fun bestCarrier(maxEnergy: Int): bodyArray {
     val maxSmallParts = maxEnergy / 50
@@ -58,7 +65,7 @@ fun newName(role: String): String {
     val tick2 = (Game.time / 26) % 5
     val tick3 = (Game.time / 26 / 5) % 26
     val tickName = "${"abcdefghijklmnopqrstuvwxyz"[tick3]}${"aeiou"[tick2]}${"abcdefghijklmnopqrstuvwxyz"[tick]}"
-    return "${role.lowercase().capitalize()}-${tickName.capitalize()}"
+    return "${tickName.capitalize()}"
 }
 
 fun spawnCreeps(
@@ -68,15 +75,18 @@ fun spawnCreeps(
 
     val capacity = spawn.room.energyCapacityAvailable
 
-    val harvesterCount = spawn.room.optimalHarvesters(1)
+    val harvesterCount = spawn.room.optimalHarvesters(2) // Todo: update dynamically
 
     val (role: String, body: bodyArray) = when {
 
-        creeps.count { it.memory.role == Role.SETTLER } < harvesterCount -> Pair(Role.SETTLER, bestMultipurpose(capacity))
+        //creeps.count { it.memory.role == Role.SETTLER } < harvesterCount -> Pair(Role.SETTLER, bestMultipurpose(capacity))
+        creeps.count { it.memory.role == Role.HARVESTER } < harvesterCount -> Pair(Role.HARVESTER, bestWorker(capacity))
 
-        creeps.count { it.memory.role == Role.CARRIER } < 3 -> Pair(Role.CARRIER, bestOffRoad(capacity))
+        creeps.count { it.memory.role == Role.CARRIER } < 3 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
 
         creeps.count { it.memory.role == Role.UPGRADER } < 2 -> Pair(Role.UPGRADER, bestWorker(capacity))
+
+        creeps.count { it.memory.role == Role.BUILDER } < 3 -> Pair(Role.BUILDER, bestWorker(capacity))
 
         spawn.room.find(FIND_CONSTRUCTION_SITES).isNotEmpty() &&
                creeps.count { it.memory.role == Role.BUILDER } < 2 -> Pair(Role.BUILDER, bestWorker(capacity))

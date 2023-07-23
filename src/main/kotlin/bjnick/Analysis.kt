@@ -61,7 +61,7 @@ fun Room.visualizeSources(): Unit {
     this.find(FIND_SOURCES).forEach {
         val optimal = it.optimalHarvesters(memory.harvesterWorkParts)
         val assigned = it.getAssignedHarvesterArray().size
-        val textColor = if (optimal == assigned) "#00FF00" else "#AAAAAA"
+        val textColor = if (optimal == assigned) "#00FF00" else if (optimal < assigned) "#FFFF00" else "#AAAAAA"
         this.visual.text("$assigned/$optimal", it.pos.x.toDouble(), it.pos.y.toDouble()-0.4, options { color = textColor })
     }
 }
@@ -85,6 +85,14 @@ fun Room.pickSourceForHarvester(creep: Creep): Source {
 fun Room.assignSource(creep: Creep, source: Source) {
     creep.memory.assignedSource = source.id
     source.setAssignedHarvesterArray(source.getAssignedHarvesterArray().plus(creep.name))
-    // TODO: deal with dead creeps
+}
+
+fun unassignSource(creepName: String) {
+    // Dealing with dead creep
+    val sourceID = Memory.creeps[creepName]?.assignedSource
+    val sourceObj = Game.getObjectById<Source>(sourceID) ?: return
+    sourceObj.setAssignedHarvesterArray(sourceObj
+        .getAssignedHarvesterArray().filterNot { it == creepName }.toTypedArray())
+    Memory.creeps[creepName]?.assignedSource = ""
 }
 
