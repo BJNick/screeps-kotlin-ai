@@ -93,10 +93,10 @@ fun Creep.builder() {
         //if (!ProgressState.carriersPresent)
         collectFromClosest() // TODO
     } else {
-        val sites = getConstructionSites(room)
+        val site = getConstructionSite(room)
 
-        if (sites.isNotEmpty())
-            putEnergy(sites.first())
+        if (site != null)
+            putEnergy(site)
         else {
             var toRepair = findCloseRepairTarget(5000)
             if (toRepair != null) {
@@ -128,35 +128,24 @@ fun Creep.repairer() {
         collectFromClosest() // TODO
     } else {
         // Repair critical entities
-        val toRepairCritical = findCriticalRepairTargets()
-        if (toRepairCritical.isNotEmpty()) {
-            goRepair(toRepairCritical.first())
+        val toRepairCritical = findCriticalRepairTarget()
+        if (toRepairCritical != null) {
+            goRepair(toRepairCritical)
             return
         }
 
         // Build walls that are at zero hits
-        val wallsToBuild = findWallConstructionSites()
-        if (wallsToBuild.isNotEmpty()) {
-            putEnergy(wallsToBuild.first())
+        val wallToBuild = findWallConstructionSite()
+        if (wallToBuild != null) {
+            putEnergy(wallToBuild)
             return
         }
         // Repair entities with lowest hits first
-        var toRepair = findRepairTarget(200)
-        if (toRepair != null) {
-            goRepair(toRepair)
-            return
-        }
-        toRepair = findCloseRepairTarget(5000)
-        if (toRepair != null) {
-            goRepair(toRepair)
-            return
-        }
-        toRepair = findRepairTarget(5000)
-        if (toRepair != null) {
-            goRepair(toRepair)
-            return
-        }
-        toRepair = findRepairTarget(10000)
+        val toRepair = findRepairTarget(200) ?:
+            findCloseRepairTarget(5000) ?:
+            findRepairTarget(5000) ?:
+            findContainerRepairTarget() ?:
+            findRepairTarget(10000)
         if (toRepair != null) {
             goRepair(toRepair)
             return
