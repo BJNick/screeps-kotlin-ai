@@ -4,6 +4,8 @@ import assignedRoom
 import assignedSource
 import collecting
 import homeRoom
+import lastTripDuration
+import lastTripStarted
 import prospectedCount
 import prospectingRooms
 import prospectingTargets
@@ -160,8 +162,11 @@ fun Creep.prospector() {
         memory.assignedSource = Memory.prospectingTargets.randomOrNull() ?: ""
         memory.assignedRoom = Memory.prospectingRooms.randomOrNull() ?: ""
     }
-    if (memory.collecting && store[RESOURCE_ENERGY] == store.getCapacity())
+    if (memory.collecting && store[RESOURCE_ENERGY] == store.getCapacity()) {
         memory.prospectedCount++
+        memory.lastTripDuration = Game.time - memory.lastTripStarted
+        memory.lastTripStarted = Game.time
+    }
 
     if (isCollecting()) {
         if (memory.assignedRoom == "")
@@ -171,7 +176,7 @@ fun Creep.prospector() {
             moveTo(RoomPosition(25, 25, memory.assignedRoom))
             return
         }
-        val assignedSource = this.assignedSource()
+        val assignedSource = this.assignedSource(false)
         if (assignedSource == null) {
             say("No task")
             return

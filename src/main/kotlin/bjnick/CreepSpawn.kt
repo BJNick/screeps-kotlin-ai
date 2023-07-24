@@ -81,12 +81,13 @@ fun spawnCreeps(
 
     val capacity = spawn.room.energyCapacityAvailable
 
-    val harvesterCount = spawn.room.optimalHarvesters(4) // Todo: update dynamically
+    val maxWorkParts = spawn.room.energyCapacityAvailable / 100 - 1
+    val harvesterCount = spawn.room.optimalHarvesters(maxWorkParts)
 
     val (role: String, body: bodyArray) = when {
 
         //creeps.count { it.memory.role == Role.SETTLER } < harvesterCount -> Pair(Role.SETTLER, bestMultipurpose(capacity))
-        creeps.count { it.memory.role == Role.HARVESTER } < harvesterCount -> Pair(Role.HARVESTER, bestWorker(capacity))
+        creeps.count { it.memory.role == Role.HARVESTER && it.ticksToLive>50 } < harvesterCount -> Pair(Role.HARVESTER, bestWorker(capacity))
 
         creeps.count { it.memory.role == Role.CARRIER } < 4 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
 

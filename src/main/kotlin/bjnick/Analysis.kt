@@ -1,6 +1,8 @@
 package bjnick
 
+import DataPoint
 import assignedSource
+import energyGraphData
 import getAssignedHarvesterArray
 import getHarvesterSpaces
 import harvesterWorkParts
@@ -10,6 +12,7 @@ import screeps.api.structures.StructureContainer
 import setAssignedHarvesterArray
 import setHarvesterSpaces
 import kotlin.math.ceil
+import kotlin.math.max
 import kotlin.math.min
 
 // Function to count empty spaces around a source, and save info about it
@@ -139,3 +142,81 @@ fun Room.placeExtensionSites(count: Int) {
         }
     }
 }
+
+fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
+    // Then graph the last 5 points (if there are 5 points)
+    val maxPoints = 30
+
+    val extensionEnergy = room.energyAvailable
+    val containerEnergy = room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_CONTAINER } })
+        .sumOf { it.unsafeCast<StoreOwner>().store[RESOURCE_ENERGY] ?: 0 }
+    val sourceEnergy = room.find(FIND_SOURCES).sumOf { it.energy }
+    // If Game.time % N == 0, then record new point, else add to last point
+    if (Game.time % every == 0) {
+        val combined = DataPoint(sourceEnergy/every, extensionEnergy/every, containerEnergy/every, Game.time)
+        Memory.energyGraphData += combined
+    } else {
+        val lastPoint = Memory.energyGraphData[Memory.energyGraphData.size-1]
+        Memory.energyGraphData[Memory.energyGraphData.size-1] =
+            DataPoint(lastPoint.sourceEnergy + sourceEnergy/every,
+                lastPoint.extensionEnergy + extensionEnergy/every,
+                lastPoint.containerEnergy + containerEnergy/every, lastPoint.time)
+    }
+    // Trim Memory to max points
+    Memory.energyGraphData = Memory.energyGraphData.takeLast(maxPoints+1).toTypedArray()
+    val separation = 1
+    val xOffset = x-maxPoints*separation/2
+
+    val extensionPolyLine = Memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+        .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.extensionEnergy*0.005+y)
+    }.toTypedArray()
+    room.visual.poly(extensionPolyLine, options { stroke = "#FFFF00"; opacity = 0.5 })
+
+    val sourcePolyLine = Memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+        .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.sourceEnergy*0.001+y)
+        }.toTypedArray()
+    room.visual.poly(sourcePolyLine, options { stroke = "#FFFFFF"; opacity = 0.5 })
+
+    val containerPolyLine = Memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+        .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.containerEnergy*0.001+y)
+        }.toTypedArray()
+    room.visual.poly(containerPolyLine, options { stroke = "#FFAA00"; opacity = 0.5 })
+
+
+    val maxStartPointHeight = min(min(extensionPolyLine[0][1], sourcePolyLine[0][1]), containerPolyLine[0][1])
+    room.visual.text("Source", xOffset, maxStartPointHeight-1-0.5,
+        options { color = "#FFFFFF"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+    room.visual.text("Extension", xOffset, maxStartPointHeight-0.5-0.5,
+        options { color = "#FFFF00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+    room.visual.text("Container", xOffset, maxStartPointHeight-0-0.5,
+        options { color = "#FFAA00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+
+    val drawnPoints = extensionPolyLine.size
+    val lastExtensionEnergy = Memory.energyGraphData[Memory.energyGraphData.size-2].extensionEnergy
+    val lastSourceEnergy = Memory.energyGraphData[Memory.energyGraphData.size-2].sourceEnergy
+    val lastContainerEnergy = Memory.energyGraphData[Memory.energyGraphData.size-2].containerEnergy
+
+    // Add label to last point
+    room.visual.text("$lastExtensionEnergy", extensionPolyLine[drawnPoints-1][0]+0.25,
+        extensionPolyLine[drawnPoints-1][1]+0.125,
+        options { color = "#FFFF00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+    room.visual.text("$lastSourceEnergy", sourcePolyLine[drawnPoints-1][0]+0.25,
+        sourcePolyLine[drawnPoints-1][1]+0.125,
+        options { color = "#FFFFFF"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+    room.visual.text("$lastContainerEnergy", containerPolyLine[drawnPoints-1][0]+0.25,
+        containerPolyLine[drawnPoints-1][1]+0.125,
+        options { color = "#FFAA00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+
+    // Draw some tickmark points (displaying "every")
+    for (i in 0 until drawnPoints) {
+        room.visual.text("${-(drawnPoints-i-1)*every}", i*separation+xOffset, y+0.5,
+            options { color = "#FFFFFF"; font = "0.25"; align = TEXT_ALIGN_CENTER })
+    }
+
+    // Show a counter until next data point
+    val counter = every - Game.time % every
+    room.visual.text("$counter", (drawnPoints-1)*separation+xOffset, y+0.5+0.75,
+        options { color = "#FFFFFF"; font = "0.5"; align = TEXT_ALIGN_CENTER })
+
+}
+

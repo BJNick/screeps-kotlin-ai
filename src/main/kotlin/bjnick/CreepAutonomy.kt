@@ -111,7 +111,7 @@ fun Creep.collectFromClosest(fromRoom: Room = this.room) {
 
     val takeFromCarriers = getVacantSpawnOrExt(room) == null
 
-    val harvesterCreep = fromRoom.find(FIND_MY_CREEPS, options { filter = { it.store[RESOURCE_ENERGY] > 0 &&
+    val harvesterCreep = fromRoom.find(FIND_MY_CREEPS, options { filter = { it.store[RESOURCE_ENERGY] >= 20 &&
             (it.memory.role == Role.HARVESTER || it.memory.role == Role.SETTLER ||
                 (it.memory.role == Role.CARRIER && takeFromCarriers)) }})
         .sortedBy { it.store[RESOURCE_ENERGY]?.times(-1) }
@@ -316,5 +316,6 @@ fun Creep.findClosestContainer(): StructureContainer? {
         .filter { it.structureType == STRUCTURE_CONTAINER || it.structureType == STRUCTURE_TOWER }
         .map { it.unsafeCast<StructureContainer>() }
         .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
-        .minByOrNull { it.pos.getRangeTo(pos) }
+        .sortedBy { it.structureType != STRUCTURE_TOWER }
+        .minByOrNull { it.pos.getRangeTo(pos)/3 }
 }

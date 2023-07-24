@@ -21,6 +21,8 @@ var CreepMemory.collectingPriority : String by memory { "" }
 var CreepMemory.assignedRoom : String by memory { "" }
 var CreepMemory.homeRoom : String by memory { "" }
 var CreepMemory.prospectedCount : Int by memory { 0 }
+var CreepMemory.lastTripStarted : Int by memory { 0 }
+var CreepMemory.lastTripDuration : Int by memory { 0 }
 
 /* Rest of the persistent memory structures.
 * These set an unused test variable to 0. This is done to illustrate the how to add variables to
@@ -56,6 +58,10 @@ var Memory.prospectingRooms: Array<String> by memory { arrayOf() }
 var Memory.ignorePlayers: Array<String> by memory { arrayOf() }
 
 var Memory.visualizeRepairs: Boolean by memory { false }
+
+class DataPoint(val sourceEnergy: Int, val extensionEnergy: Int, val containerEnergy: Int, val time: Int)
+
+var Memory.energyGraphData: Array<DataPoint> by memory { arrayOf() }
 
 /* spawn.memory */
 //var SpawnMemory.test: Int by memory { 0 }

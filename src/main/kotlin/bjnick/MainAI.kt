@@ -2,6 +2,7 @@ package bjnick
 
 import forceReassignSources
 import ignorePlayers
+import lastTripDuration
 import numberOfCreeps
 import prospectedCount
 import role
@@ -80,6 +81,8 @@ fun gameLoop() {
 
     if (Memory.visualizeRepairs)
         mainSpawn.room.visualizeRepairs(4000)
+
+    recordGraph(mainSpawn.room, 15, 15.0, 48.0)
 }
 
 fun Room.showCreepList(role: String, x: Double, y: Double) {
@@ -108,6 +111,10 @@ fun Room.showProspectorInfo(creep: Creep?, x: Double, y: Double) {
     this.visual.text("Distance: $prospectorDistance", x, y + 2.25,
         options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
     this.visual.text("Done: ${creep.memory.prospectedCount}", x, y + 3.25,
+        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
+    // show last trip duration
+    val lastTripDuration = creep.memory.lastTripDuration
+    this.visual.text("Duration: $lastTripDuration", x, y + 4.25,
         options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
 }
 
