@@ -6,6 +6,7 @@ import getHarvesterSpaces
 import harvesterWorkParts
 import optimalHarvesters
 import screeps.api.*
+import screeps.api.structures.StructureContainer
 import setAssignedHarvesterArray
 import setHarvesterSpaces
 import kotlin.math.ceil
@@ -62,7 +63,20 @@ fun Room.visualizeSources(): Unit {
         val optimal = it.optimalHarvesters(memory.harvesterWorkParts)
         val assigned = it.getAssignedHarvesterArray().size
         val textColor = if (optimal == assigned) "#00FF00" else if (optimal < assigned) "#FFFF00" else "#AAAAAA"
-        this.visual.text("$assigned/$optimal", it.pos.x.toDouble(), it.pos.y.toDouble()-0.4, options { color = textColor })
+        val offset = if (it.room.getTerrain().get(it.pos.x,it.pos.y+1) == TERRAIN_MASK_NONE) -0.6 else 0.6+0.45
+        this.visual.text("$assigned/$optimal", it.pos.x.toDouble(), it.pos.y.toDouble()+offset, options { color = textColor })
+        // Also display # of energy left
+        val energyLeft = it.energy
+        val textColor2 = if (energyLeft > 300) "#AAAAAA" else "#FFAAAA"
+        this.visual.text("$energyLeft", it.pos.x.toDouble()-1, it.pos.y.toDouble(), options { color = textColor2; font = "0.5" })
+        // Also display amount in close container
+        val containers = it.pos.findInRange(FIND_STRUCTURES, 1, options { filter = { it.structureType == STRUCTURE_CONTAINER } })
+        if (containers.isNotEmpty()) {
+            val container = containers.first() as StructureContainer
+            val textColor3 = if (container.store[RESOURCE_ENERGY] > 300) "#FFFFAA" else "#FFAAAA"
+            this.visual.text("${container.store[RESOURCE_ENERGY]}", it.pos.x.toDouble()-1, it.pos.y.toDouble()+0.5, options { color = textColor3; font = "0.5" })
+        }
+
     }
 }
 
@@ -71,8 +85,9 @@ fun Room.visualizeSources(): Unit {
 fun Room.pickSourceForHarvester(creep: Creep): Source {
     val sources = this.find(FIND_SOURCES)
     // Recalculate based on work parts of the new creep
-    val newWorkParts = creep.body.count() { it.type == WORK }
-    this.optimalHarvesters(newWorkParts)
+    // ACTUALLY DO NOT TO MAKE CONSISTENT
+    //val newWorkParts = creep.body.count() { it.type == WORK }
+    //this.optimalHarvesters(newWorkParts)
     // Sort by distance to creep
     val sortedSources = sources.sortedBy { creep.pos.getRangeTo(it.pos) }
     // Find the first source that has less than optimal harvesters assigned
@@ -96,3 +111,31 @@ fun unassignSource(creepName: String) {
     Memory.creeps[creepName]?.assignedSource = ""
 }
 
+
+fun Room.placeExtensionSites(count: Int) {
+    // Find a place around the spawner to place a new extension
+    val spawner = this.find(FIND_MY_SPAWNS).first()
+    var placed = 0
+    for (radius in 1..5) {
+        for (x in -radius..radius) {
+            for (y in -radius..radius) {
+                if (placed >= count) {
+                    return
+                }
+                if ((x == radius || y == radius) && x%2 == y%2) {
+                    val terrainAt = this.getTerrain()[spawner.pos.x + x, spawner.pos.y + y]
+                    val structures = this.lookForAt(LOOK_STRUCTURES, spawner.pos.x + x, spawner.pos.y + y)?.firstOrNull()
+                    val constructionSites = this.lookForAt(LOOK_CONSTRUCTION_SITES, spawner.pos.x + x, spawner.pos.y + y)?.firstOrNull()
+                    if (terrainAt.value and TERRAIN_MASK_WALL.value == 0 && structures == null && constructionSites == null) {
+                        //createFlag(spawner.pos.x + x, spawner.pos.y + y, "ExtensionSite")
+                        val err = this.createConstructionSite(spawner.pos.x + x, spawner.pos.y + y, STRUCTURE_EXTENSION)
+                        if (err != OK) {
+                            return
+                        }
+                        placed++
+                    }
+                }
+            }
+        }
+    }
+}

@@ -26,7 +26,7 @@ fun bestWorker(maxEnergy: Int): bodyArray {
 fun bestOffRoad(maxEnergy: Int): bodyArray {
     val maxSmallParts = maxEnergy / 50
     return Array(maxSmallParts) { i -> when (i%3) {
-        1 -> CARRY
+        2 -> CARRY
         else -> MOVE
     }}
 }
@@ -37,6 +37,12 @@ fun bestOnRoad(maxEnergy: Int): bodyArray {
         0 -> MOVE
         else -> CARRY
     }}
+}
+
+fun bestOffRoadWorker(maxEnergy: Int): bodyArray {
+    val basicSetup = arrayOf(MOVE, MOVE, WORK, CARRY)
+    val addon = bestOffRoad(maxEnergy-100-50-50-50)
+    return basicSetup + addon
 }
 
 fun bestCarrier(maxEnergy: Int): bodyArray {
@@ -75,21 +81,32 @@ fun spawnCreeps(
 
     val capacity = spawn.room.energyCapacityAvailable
 
-    val harvesterCount = spawn.room.optimalHarvesters(2) // Todo: update dynamically
+    val harvesterCount = spawn.room.optimalHarvesters(4) // Todo: update dynamically
 
     val (role: String, body: bodyArray) = when {
 
         //creeps.count { it.memory.role == Role.SETTLER } < harvesterCount -> Pair(Role.SETTLER, bestMultipurpose(capacity))
         creeps.count { it.memory.role == Role.HARVESTER } < harvesterCount -> Pair(Role.HARVESTER, bestWorker(capacity))
 
-        creeps.count { it.memory.role == Role.CARRIER } < 3 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
+        creeps.count { it.memory.role == Role.CARRIER } < 4 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
 
         creeps.count { it.memory.role == Role.UPGRADER } < 2 -> Pair(Role.UPGRADER, bestWorker(capacity))
 
         creeps.count { it.memory.role == Role.BUILDER } < 3 -> Pair(Role.BUILDER, bestWorker(capacity))
 
+        creeps.count { it.memory.role == Role.REPAIRER } < 1 -> Pair(Role.REPAIRER, bestOffRoadWorker(capacity))
+
+        creeps.count { it.memory.role == Role.PROSPECTOR } < 1 -> Pair(Role.PROSPECTOR, bestOffRoadWorker(capacity))
+
         spawn.room.find(FIND_CONSTRUCTION_SITES).isNotEmpty() &&
                creeps.count { it.memory.role == Role.BUILDER } < 2 -> Pair(Role.BUILDER, bestWorker(capacity))
+
+
+        creeps.count { it.memory.role == Role.UPGRADER } < 3 -> Pair(Role.UPGRADER, bestWorker(capacity))
+
+        creeps.count { it.memory.role == Role.CARRIER } < 6 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
+
+        creeps.count { it.memory.role == Role.REPAIRER } < 2 -> Pair(Role.REPAIRER, bestOffRoadWorker(capacity))
 
         // TODO: Better harvesters
 
@@ -103,10 +120,11 @@ fun spawnCreeps(
     val newName = newName(role)
     val code = spawn.spawnCreep(body, newName, options {
         memory = jsObject<CreepMemory> { this.role = role; this.distributesEnergy = role == Role.BUILDER || role == Role.UPGRADER }
+        directions = arrayOf(BOTTOM, LEFT, RIGHT) // specific optimal directions for current setup
     })
 
     when (code) {
-        OK -> console.log("spawning $newName with body $body")
+        OK -> console.log("spawning $newName the ${role.lowercase()} with body $body")
         ERR_BUSY, ERR_NOT_ENOUGH_ENERGY -> run { } // do nothing
         else -> console.log("unhandled error code $code")
     }

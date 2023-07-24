@@ -2,11 +2,13 @@ package bjnick
 
 import assignedSource
 import collecting
+import collectingPriority
 import distributesEnergy
 import role
 import screeps.api.*
-import screeps.api.RoomVisual.LineStyle
 import screeps.api.structures.*
+import screeps.utils.unsafe.jsObject
+import kotlin.random.Random
 
 /*object pathStyle: RoomVisual.ShapeStyle {
     override var fill: String? = "transparent";
@@ -15,12 +17,6 @@ import screeps.api.structures.*
     override var strokeWidth: Double? = .15;
     override var opacity: Double? = .1;
 }*/
-
-fun distributorPriority(role: String): Int = when (role) {
-    Role.BUILDER -> 1
-    Role.UPGRADER -> 10
-    else -> 99
-}
 
 fun logError(message: Any?) : Unit = console.log(message)
 
@@ -36,21 +32,51 @@ fun Creep.isCollecting(): Boolean {
     return memory.collecting
 }
 
-fun Creep.assignedSource(): Source {
+fun Creep.assignedSource(pick: Boolean = true): Source? {
     if (memory.assignedSource != "") {
-        return Game.getObjectById(memory.assignedSource) ?: throw RuntimeException("No source found")
+        return Game.getObjectById(memory.assignedSource)
     }
-    val source = room.pickSourceForHarvester(this)
-    room.assignSource(this, source)
-    return source
+    if (pick) {
+        val source = room.pickSourceForHarvester(this)
+        room.assignSource(this, source)
+        return source
+    } else {
+        return null
+    }
+}
+
+fun Creep.myCollectingPriority(): RoomPosition {
+    val controller = room.controller!!.pos
+    val spawn = room.find(FIND_MY_SPAWNS)[0].pos
+    val tower = room.find(FIND_MY_STRUCTURES, options { filter = { it.structureType == STRUCTURE_TOWER } })
+        .firstOrNull()?.pos ?: RoomPosition(0, 0, room.name)
+    val priority = when (name.hashCode() % 3) {
+        0 -> controller
+        1 -> spawn
+        else -> tower
+    }
+    this.memory.collectingPriority = "${priority.x},${priority.y}"
+    return priority
+}
+
+fun Creep.myRepairPriority(): RoomPosition {
+    val edge1 = RoomPosition(0, 0, room.name)
+    val edge2 = RoomPosition(49, 49, room.name)
+    val priority = when (name.hashCode() % 2) {
+        0 -> edge1
+        else -> edge2
+    }
+    return priority
+}
+
+fun Creep.myRepairRandomSeed(): Int {
+    return name.hashCode()
 }
 
 fun Creep.collectFromASource(fromRoom: Room = this.room) {
     //val source = fromRoom.find(FIND_SOURCES)[0]
-    val source = assignedSource()
-    if (harvest(source) == ERR_NOT_IN_RANGE) {
-        moveTo(source.pos)
-    }
+    val source = assignedSource() ?: throw RuntimeException("No source assigned")
+    moveIfNotInRange(source, harvest(source), "collectFromASource")
 }
 
 
@@ -62,10 +88,22 @@ fun Creep.collectFromHarvesters(fromRoom: Room = this.room) {
     val harvesterCreeps = fromRoom.find(FIND_MY_CREEPS)
         .filter { it.memory.role == Role.HARVESTER || it.memory.role == Role.SETTLER }
         .filter { it.store[RESOURCE_ENERGY] > 0 }
-        .sortedBy { it.pos.getRangeTo(this.pos).times(-1)/5 }
-        .sortedBy { it.store[RESOURCE_ENERGY] }
+        .sortedBy { it.store[RESOURCE_ENERGY]?.times(-1) }
+        .sortedBy { it.pos.getRangeTo(myCollectingPriority())/5 }
 
-    harvesterCreeps.lastOrNull()?.let {
+    val harvesterContainers = fromRoom.find(FIND_STRUCTURES)
+        .filter { it.structureType == STRUCTURE_CONTAINER }
+        .map { it.unsafeCast<StoreOwner>() }
+        .filter { it.store[RESOURCE_ENERGY] > this.store.getFreeCapacity() }
+        .sortedBy { it.pos.getRangeTo(myCollectingPriority())/5 }
+
+    if (harvesterContainers.isNotEmpty()) {
+        val container = harvesterContainers[0]
+        moveIfNotInRange(container, this.withdraw(container, RESOURCE_ENERGY), "collectEnergy")
+        return
+    }
+
+    harvesterCreeps.firstOrNull()?.let {
         moveIfNotInRange(it, it.transfer(this, RESOURCE_ENERGY), "collectEnergy")
     }
 
@@ -76,11 +114,27 @@ fun Creep.collectFromHarvesters(fromRoom: Room = this.room) {
  */
 fun Creep.collectFromClosest(fromRoom: Room = this.room) {
 
+    val takeFromCarriers = getVacantSpawnAndExt(room).isEmpty()
+
     val harvesterCreeps = fromRoom.find(FIND_MY_CREEPS)
-        .filter { it.memory.role == Role.HARVESTER || it.memory.role == Role.SETTLER || it.memory.role == Role.CARRIER }
+        .filter { it.memory.role == Role.HARVESTER || it.memory.role == Role.SETTLER ||
+                (it.memory.role == Role.CARRIER && takeFromCarriers) }
         .filter { it.store[RESOURCE_ENERGY] > 0 }
         .sortedBy { it.store[RESOURCE_ENERGY]?.times(-1) }
         .sortedBy { it.pos.getRangeTo(this.pos)/5 }
+
+    val harvesterContainers = fromRoom.find(FIND_STRUCTURES)
+        .filter { it.structureType == STRUCTURE_CONTAINER }
+        .map { it.unsafeCast<StoreOwner>() }
+        .filter { it.store[RESOURCE_ENERGY] > this.store.getFreeCapacity() }
+        .sortedBy { it.pos.getRangeTo(this.pos)/5 }
+
+
+    if (harvesterContainers.isNotEmpty() && (harvesterCreeps.isEmpty() || harvesterContainers[0].pos.getRangeTo(this.pos) <= harvesterCreeps[0].pos.getRangeTo(this.pos))) {
+        val container = harvesterContainers[0]
+        moveIfNotInRange(container, this.withdraw(container, RESOURCE_ENERGY), "collectEnergy")
+        return
+    }
 
     harvesterCreeps.firstOrNull()?.let {
         moveIfNotInRange(it, it.transfer(this, RESOURCE_ENERGY), "collectEnergy")
@@ -138,15 +192,19 @@ fun Creep.putEnergy(target: HasPosition?) {
     moveIfNotInRange(target, err, "putEnergy")
 }
 
+fun Creep.goRepair(target: Structure?) {
+    if (target == null) return
+    moveIfNotInRange(target, repair(target), "goRepair")
+}
+
 fun Creep.stackToCarriers(): Boolean {
 
     if (store[RESOURCE_ENERGY] == 0) return false
 
-    val nearbyCarriers = room.find(FIND_MY_CREEPS)
-        .filter { it.memory.role == Role.CARRIER }
-        .filter { it.pos.isNearTo(pos) }
-        .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
-        .filter { it.store[RESOURCE_ENERGY] > store[RESOURCE_ENERGY] }
+    val nearbyCarriers = room.find(FIND_MY_CREEPS, options { filter = {
+                it.memory.role == Role.CARRIER && it.pos.isNearTo(pos)
+                && it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY)
+                && it.store[RESOURCE_ENERGY] > store[RESOURCE_ENERGY] }})
         .sortedBy { it.store[RESOURCE_ENERGY] }
 
     nearbyCarriers.lastOrNull()?.let {
@@ -159,42 +217,64 @@ fun Creep.stackToCarriers(): Boolean {
 }
 
 fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function: String = "moveIfNotInRange") {
-    if (err == ERR_NOT_IN_RANGE) {
-        moveTo(target.pos)
+    if (err == ERR_NOT_IN_RANGE || err == ERR_NOT_ENOUGH_RESOURCES) {
+        moveTo(target.pos, options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle> { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_SOLID } })
     } else if (err != OK) {
         logError("$function: error $err for " + this.name)
     }
 }
 
-val STORE_STRUCTURES = arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_CONTAINER)
+val STORE_STRUCTURES = arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER)
 
 // TODO: Save this for use in all creeps
 fun Creep.getVacantSpawnAndExt(room: Room): List<StoreOwner?> {
-    return room.find(FIND_STRUCTURES)
-        .filter { it.structureType == STRUCTURE_SPAWN || it.structureType == STRUCTURE_EXTENSION }
+    return room.find(FIND_STRUCTURES, options { filter =
+        { it.structureType in arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER) } })
         .map { it.unsafeCast<StoreOwner>() }
         .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
+        .sortedBy { it.pos.getRangeTo(myCollectingPriority()) } // CLOSEST ???
 }
 
 fun Creep.getVacantStoreStructures(room: Room): List<StoreOwner?> {
-    return room.find(FIND_STRUCTURES)
-        .filter { it.structureType in STORE_STRUCTURES }
+    return room.find(FIND_STRUCTURES, options { filter = { it.structureType in STORE_STRUCTURES } })
         .map { it.unsafeCast<StoreOwner>() }
         .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
 }
 
 fun Creep.getVacantDistributorCreeps(room: Room): List<StoreOwner?> {
-    return room.find(FIND_MY_CREEPS)
-        .filter { it.memory.distributesEnergy }
-        .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
+    return room.find(FIND_MY_CREEPS, options { filter = { it.memory.distributesEnergy && it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) } })
         .sortedBy { it.store[RESOURCE_ENERGY] }
-        .sortedBy { distributorPriority(it.memory.role) }
-        .sortedBy { it.pos.getRangeTo(pos) } // CLOSEST
+        .sortedBy { it.pos.getRangeTo(myCollectingPriority()) } // CLOSEST ???
 }
 
 // TODO: Prioritize construction sites by type
 fun Creep.getConstructionSites(room: Room): List<ConstructionSite> {
     return room.find(FIND_CONSTRUCTION_SITES).sortedBy { it.pos.getRangeTo(pos) }.sortedBy { -it.progress }
+}
+
+// Structures that need to be repaired, lowest hits first
+fun Creep.findRepairTarget(hitsLowerThan: Int): Structure? {
+    return room.find(FIND_STRUCTURES, options { filter = { it.hits < it.hitsMax && it.hits < hitsLowerThan } }).randomOrNull(Random(myRepairRandomSeed()))
+}
+
+fun StructureTower.findTowerRepairTarget(hitsLowerThan: Int): Structure? {
+    return room.find(FIND_STRUCTURES, options { filter = { it.hits < it.hitsMax && it.hits < hitsLowerThan } }).randomOrNull(Random(id.hashCode()))
+}
+
+fun Creep.findCloseRepairTarget(hitsLowerThan: Int): Structure? {
+    return room.lookAtAreaAsArray(pos.y - 1, pos.x - 1, pos.y + 1, pos.x + 1)
+        .filter { it.type == LOOK_STRUCTURES && it.structure != null && (it.structure?.hits < it.structure?.hitsMax && it.structure?.hits < hitsLowerThan) }
+        .randomOrNull(Random(myRepairRandomSeed()))?.structure
+        //options { filter = { it.hits < it.hitsMax && it.hits < hitsLowerThan } }).randomOrNull(Random(myRepairRandomSeed()))
+}
+
+// Structures that need to be repaired, lowest hits first
+fun Creep.findCriticalRepairTargets(): List<Structure> {
+    return room.find(FIND_STRUCTURES, options { filter = { it.hits < it.hitsMax && it.hits < 650 } }).sortedBy { it.pos.getRangeTo(myRepairPriority()) }.sortedBy { it.hits }
+}
+
+fun Creep.findWallConstructionSites(): List<ConstructionSite> {
+    return room.find(FIND_CONSTRUCTION_SITES, options { filter = { it.structureType == STRUCTURE_WALL || it.structureType == STRUCTURE_RAMPART } }).sortedBy { it.pos.getRangeTo(myRepairPriority()) }
 }
 
 fun Creep.findEnergyTarget(room: Room): HasPosition? {
@@ -212,4 +292,20 @@ fun Creep.findDroppedEnergy(room: Room): HasPosition? {
         is Resource -> it.amount
         else -> 0
     }}.lastOrNull()
+}
+
+fun Creep.findBufferContainer(): StructureContainer? {
+    return room.find(FIND_STRUCTURES).filter { it.structureType == STRUCTURE_CONTAINER }
+        .filter { it.pos.getRangeTo(pos) < 2 }
+        .map { it.unsafeCast<StructureContainer>() }
+        .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
+        .firstOrNull()
+}
+
+fun Creep.findClosestContainer(): StructureContainer? {
+    return room.find(FIND_STRUCTURES).filter { it.structureType == STRUCTURE_CONTAINER || it.structureType == STRUCTURE_TOWER }
+        .map { it.unsafeCast<StructureContainer>() }
+        .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
+        .sortedBy { it.pos.getRangeTo(pos) }
+        .firstOrNull()
 }

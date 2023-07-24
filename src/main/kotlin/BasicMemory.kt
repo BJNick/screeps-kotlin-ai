@@ -16,6 +16,11 @@ var CreepMemory.targetID : String by memory { "" }
 var CreepMemory.targetTask : String by memory { "" }
 
 var CreepMemory.assignedSource : String by memory { "" }
+var CreepMemory.collectingPriority : String by memory { "" }
+
+var CreepMemory.assignedRoom : String by memory { "" }
+var CreepMemory.homeRoom : String by memory { "" }
+var CreepMemory.prospectedCount : Int by memory { 0 }
 
 /* Rest of the persistent memory structures.
 * These set an unused test variable to 0. This is done to illustrate the how to add variables to
@@ -44,6 +49,13 @@ var RoomMemory.sourceHarvesterSpaces: Array<Int> by memory { arrayOf() }
 var RoomMemory.sourceAssignedHarvesters: Array<Array<String>> by memory { arrayOf() }
 
 var Memory.forceReassignSources: Boolean by memory { false }
+
+var Memory.prospectingTargets: Array<String> by memory { arrayOf() }
+var Memory.prospectingRooms: Array<String> by memory { arrayOf() }
+
+var Memory.ignorePlayers: Array<String> by memory { arrayOf() }
+
+var Memory.visualizeRepairs: Boolean by memory { false }
 
 /* spawn.memory */
 //var SpawnMemory.test: Int by memory { 0 }
