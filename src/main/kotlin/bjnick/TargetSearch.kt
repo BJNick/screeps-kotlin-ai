@@ -104,7 +104,7 @@ fun <T, R: Comparable<R>> Room.bySort(findConstant: FindConstant<T>, f: Filter<T
     return bySort(arrayOf(findConstant), f, sortBy)
 }
 
-
+// TODO: Random element ?
 
 
 fun test() {
