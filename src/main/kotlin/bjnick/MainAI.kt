@@ -65,7 +65,8 @@ fun gameLoop() {
     // Show prospector info
     val prospectorX = 14.0
     val prospectorY = 2.5
-    Game.creeps.values.filter { it.memory.role == Role.PROSPECTOR || it.memory.role == Role.SETTLER }.forEachIndexed { index, it ->
+    Game.creeps.values.filter { it.memory.role == Role.PROSPECTOR || it.memory.role == Role.SETTLER || it.memory.role == Role.OUTER_HARVESTER }
+        .forEachIndexed { index, it ->
         mainSpawn.room.showProspectorInfo(it, prospectorX, prospectorY + index*2)
     }
 
@@ -123,7 +124,7 @@ fun Room.showProspectorInfo(creep: Creep?, x: Double, y: Double) {
     val prospectorName = creep.name
     val prospectorInventory = "${creep.store.getUsedCapacity()}/${creep.store.getCapacity()}"
     val prospectorDistance = 80 - creep.pos.x - if (creep.room == this) 50 else 0//creep.pos.getRangeTo(this.find(FIND_MY_SPAWNS)[0])
-    this.visual.text("Prospector $prospectorName", x, y,
+    this.visual.text("${creep.memory.role.lowercase().capitalize()} $prospectorName", x, y,
         options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })
     this.visual.text("$prospectorInventory, d$prospectorDistance", x, y + 0.75,
         options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })

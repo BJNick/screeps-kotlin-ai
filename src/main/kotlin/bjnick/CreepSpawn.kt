@@ -77,6 +77,17 @@ fun bestMultipurpose(maxEnergy: Int): bodyArray {
     }}
 }
 
+fun optimizedBuilder(maxEnergy: Int): bodyArray {
+    // One CARRY part, up to 5 WORK parts, the rest MOVE parts
+    val maxBigParts = (maxEnergy-50) / 150
+    val remainingEnergy = maxEnergy - 50 - maxBigParts*150
+    val maxSmallParts = remainingEnergy / 50
+    return arrayOf(CARRY) + Array(maxBigParts*2) { i -> when (i%2) {
+        0 -> MOVE
+        else -> WORK
+    }} + Array(maxSmallParts) { MOVE }
+}
+
 // Make a name based on tick and role
 fun newName(role: String): String {
     // Ticks should be converted to letters: any, vowel, any
@@ -108,7 +119,7 @@ fun spawnCreeps(
 
         creeps.count { it.memory.role == Role.UPGRADER } < 2 -> Pair(Role.UPGRADER, bestWorker(capacity))
 
-        creeps.count { it.memory.role == Role.BUILDER } < 2 -> Pair(Role.BUILDER, bestWorker(capacity))  // reduced from 3
+        creeps.count { it.memory.role == Role.BUILDER } < 2 -> Pair(Role.BUILDER, optimizedBuilder(capacity))  // reduced from 3
 
         creeps.count { it.memory.role == Role.REPAIRER } < 1 -> Pair(Role.REPAIRER, bestOffRoadWorker(capacity))
 

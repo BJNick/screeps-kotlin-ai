@@ -27,7 +27,10 @@ object Role {
 }
 
 fun Creep.executeRole() {
-    if (this.spawning) return
+    if (this.spawning) {
+        room.visual.text(memory.role.lowercase().capitalize(), pos.x+0.0, pos.y-1.0, options { color = "#FFFFFF"; font = "0.5"; opacity = 0.75 })
+        return
+    }
     when (memory.role) {
         Role.UNASSIGNED -> console.log("Unassigned role: $name")
         Role.SETTLER -> settler()
@@ -228,11 +231,8 @@ fun Creep.prospector() {
         }
         if (memory.homeRoom == "")
             return
-        val homeRoom = Game.rooms[memory.homeRoom]
-        if (room != homeRoom) {
-            moveTo(RoomPosition(25, 25, memory.homeRoom))
-            return
-        }
+        if (gotoHomeRoom()) return
+
         val container = findClosestContainer()
         if (container != null)
             putEnergy(container)
@@ -267,7 +267,7 @@ fun Creep.settler() {
     if (isCollecting()) {
         if (gotoAssignedRoom()) return
 
-        if (findClosestContainer() != null) {
+        if (findFullestContainer() != null) {
             if (memory.assignedSource == "")
                 unassignSource(name)
             collectFrom(findFullestContainer())
@@ -279,24 +279,30 @@ fun Creep.settler() {
         if (room.controller!!.ticksToDowngrade < 9000)
             putEnergy(room.controller)
         else {
+            val containerRepair = findContainerRepairTarget()
+            if (containerRepair != null) {
+                goRepair(containerRepair)
+                return
+            }
             val target = findWorkEnergyTarget(room)
+            //console.log("$name, target: ${target} pos: ${target?.pos}")
             if (target == room.controller || room.name == memory.homeRoom) {
                 // TODO REVERT TO PROSPECTOR BEHAVIOR
                 if (memory.homeRoom == "")
                     return
-                val homeRoom = Game.rooms[memory.homeRoom]
-                if (room != homeRoom || pos.x == 0) {  // TODO boundary check
-                    moveTo(RoomPosition(25, 25, memory.homeRoom))
-                    return
-                }
+                if (gotoHomeRoom()) return
+
                 val container = findClosestContainer()
                 if (container != null) {
-                    say("Container")
+                    //say(jsTypeOf(container).take(3)+":${container.pos.x},${container.pos.y}")
                     putEnergy(container)
                 } else {
                     putEnergy(findEnergyTarget(Game.rooms[memory.homeRoom] ?: return))
                 }
             } else {
+                if (target != null) {
+                    //say(jsTypeOf(target).take(3)+":${target.pos.x},${target.pos.y}")
+                }
                 putEnergy(findWorkEnergyTarget(room))
             }
         }

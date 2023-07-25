@@ -5,6 +5,7 @@ import assignedSource
 import collecting
 import collectingPriority
 import distributesEnergy
+import homeRoom
 import role
 import screeps.api.*
 import screeps.api.structures.*
@@ -180,6 +181,8 @@ fun Creep.putEnergy(target: HasPosition?) {
         is ConstructionSite -> build(target)
         is Creep -> transfer(target, RESOURCE_ENERGY)
 
+        // OTHER STRUCTURES SHOULD USE TRANSFER
+        is StructureRoad -> repair(target)
         is StructureWall -> repair(target)
         is StructureRampart -> repair(target)
 
@@ -398,6 +401,13 @@ fun Creep.moveToRoom(roomName: String): Boolean {
 fun Creep.gotoAssignedRoom(): Boolean {
     if (memory.assignedRoom != "") {
         return moveToRoom(memory.assignedRoom)
+    }
+    return false
+}
+
+fun Creep.gotoHomeRoom(): Boolean {
+    if (memory.homeRoom != "") {
+        return moveToRoom(memory.homeRoom)
     }
     return false
 }
