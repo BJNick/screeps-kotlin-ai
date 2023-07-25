@@ -11,6 +11,7 @@ import screeps.api.structures.StructureSpawn
 import screeps.api.structures.StructureTower
 import screeps.utils.isEmpty
 import screeps.utils.unsafe.delete
+import visualizeDyingCreeps
 import visualizeRepairs
 import kotlin.js.Date
 
@@ -27,7 +28,7 @@ fun gameLoop() {
     defendRoom(mainSpawn.room)
 
     //delete memories of creeps that have passed away
-    houseKeeping(Game.creeps)
+    houseKeeping(Game.creeps, mainSpawn.room)
 
     // just an example of how to use room memory
     mainSpawn.room.memory.numberOfCreeps = mainSpawn.room.find(FIND_CREEPS).count()
@@ -43,7 +44,10 @@ fun gameLoop() {
         }*/
     }
 
-    mainSpawn.room.visualizeSources()
+    Game.rooms.values.forEach {
+        it.visualizeSources()
+    }
+
     mainSpawn.room.visual.text("Epoch: ${newName("").substring(0,1)}${newName("").substring(1,2).repeat(2)}",
         24.5, 0.25, options { color = "#AAAAAA" })
 
@@ -58,9 +62,10 @@ fun gameLoop() {
 
     // Show prospector info
     val prospectorX = 14.0
-    val prospectorY = 8.0
-    mainSpawn.room.showProspectorInfo(Game.creeps.values.firstOrNull { it.memory.role == Role.PROSPECTOR },
-        prospectorX, prospectorY)
+    val prospectorY = 2.5
+    Game.creeps.values.filter { it.memory.role == Role.PROSPECTOR }.forEachIndexed { index, it ->
+        mainSpawn.room.showProspectorInfo(it, prospectorX, prospectorY + index*3)
+    }
 
     if (Memory.forceReassignSources) {
         for ((creepName, _) in Memory.creeps) {
@@ -81,6 +86,14 @@ fun gameLoop() {
 
     if (Memory.visualizeRepairs)
         mainSpawn.room.visualizeRepairs(4000)
+
+    // Show dying creeps
+    if (Memory.visualizeDyingCreeps) {
+        val dyingCreeps = mainSpawn.room.find(FIND_CREEPS).filter { it.ticksToLive < 100 }
+        dyingCreeps.forEach {
+            mainSpawn.room.visual.circle(it.pos, options { radius = 0.5; fill = "#FF0000"; opacity = 0.5 })
+        }
+    }
 
     recordGraph(mainSpawn.room, 15, 15.0, 48.0)
 }
@@ -104,27 +117,25 @@ fun Room.showProspectorInfo(creep: Creep?, x: Double, y: Double) {
     val prospectorName = creep.name
     val prospectorInventory = "${creep.store.getUsedCapacity()}/${creep.store.getCapacity()}"
     val prospectorDistance = 80 - creep.pos.x - if (creep.room == this) 50 else 0//creep.pos.getRangeTo(this.find(FIND_MY_SPAWNS)[0])
-    this.visual.text("Prospector $prospectorName", x, y + 0.25,
-        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
-    this.visual.text("Inventory: $prospectorInventory", x, y + 1.25,
-        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
-    this.visual.text("Distance: $prospectorDistance", x, y + 2.25,
-        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
-    this.visual.text("Done: ${creep.memory.prospectedCount}", x, y + 3.25,
-        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
-    // show last trip duration
+    this.visual.text("Prospector $prospectorName", x, y,
+        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })
+    this.visual.text("$prospectorInventory, d$prospectorDistance", x, y + 0.75,
+        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })
     val lastTripDuration = creep.memory.lastTripDuration
-    this.visual.text("Duration: $lastTripDuration", x, y + 4.25,
-        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
+    this.visual.text("${creep.memory.prospectedCount}T, time: $lastTripDuration", x, y + 1.5,
+        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })
 }
 
-private fun houseKeeping(creeps: Record<String, Creep>) {
+private fun houseKeeping(creeps: Record<String, Creep>, room: Room) {
     if (Game.creeps.isEmpty()) return  // this is needed because Memory.creeps is undefined
 
     for ((creepName, _) in Memory.creeps) {
         if (creeps[creepName] == null) {
             console.log("deleting obsolete memory entry for creep $creepName")
             unassignSource(creepName)
+            unassignDistribution(creepName, room)
+            if (Memory.creeps[creepName]?.role == Role.HARVESTER)
+                Memory.forceReassignSources = true
 
             // If prospector, send report
             if (Memory.creeps[creepName]?.role == Role.PROSPECTOR) {

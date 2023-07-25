@@ -3,6 +3,7 @@ package bjnick
 import assignedRoom
 import assignedSource
 import collecting
+import distributionCategory
 import homeRoom
 import lastTripDuration
 import lastTripStarted
@@ -21,6 +22,7 @@ object Role {
     val UPGRADER = "UPGRADER"
     val REPAIRER = "REPAIRER"
     val PROSPECTOR = "PROSPECTOR"
+    val CLAIMER = "CLAIMER"
 }
 
 fun Creep.executeRole() {
@@ -34,6 +36,7 @@ fun Creep.executeRole() {
         Role.UPGRADER -> upgrader()
         Role.REPAIRER -> repairer()
         Role.PROSPECTOR -> prospector()
+        Role.CLAIMER -> claimer()
     }
 }
 
@@ -46,31 +49,58 @@ fun Creep.pathColor() = when (memory.role) {
     Role.UPGRADER -> "#FF00FF"
     Role.REPAIRER -> "#00FFFF"
     Role.PROSPECTOR -> "#FFAA00"
-    else -> "#000000"
+    else -> "#FFFFFF"
 }
 
 
 fun Creep.settler() {
+    memory.assignedRoom = "E58N45" // TODO FOR THIS RUN ONLY
+    // For settling in nearby rooms
+    if (memory.assignedRoom != "") {
+        val assignedRoom = Game.rooms[memory.assignedRoom]
+        if (room != assignedRoom) {
+            if (memory.assignedSource != "")
+                unassignSource(name)
+            moveTo(assignedRoom?.controller?.pos ?: return)
+            return
+        }
+    }
+
     if (isCollecting()) {
-        // collectFromASource() // TODO repurposed settlers
-        if (this.memory.assignedSource != "") unassignSource(name)
-        this.memory.role = "BUILDER"
+        collectFromASource()
     } else {
         //if (!ProgressState.carriersPresent)
-        putEnergy(findEnergyTarget(room))
+        if (room.controller!!.ticksToDowngrade < 9000)
+            putEnergy(room.controller)
+        else
+            putEnergy(findWorkEnergyTarget(room))
     }
 }
 
 
 fun Creep.carrier() {
+    if (useDistributionSystem(room)) // DEBUG
+        room.visual.text("${intToCat(memory.distributionCategory)}"
+            .take(1), pos.x+0.0, pos.y+1.0, options { color = "#66FF66"; font = "0.5"; opacity = 0.5 })
+
     if (!stackToCarriers())
     if (isCollecting()) {
         findDroppedEnergy(room)?.let {
             collectFrom(it); return
         }
-        collectFromHarvesters()
+        if (useDistributionSystem(room)) {
+            collectFromHarvesters(room, pickupLocationBias())
+        } else {
+            collectFromHarvesters()
+        }
     } else {
-        putEnergy(findEnergyTarget(room))
+        if (useDistributionSystem(room)) {
+            if (memory.distributionCategory == 0)
+                pickDistributionCategory(this, room)
+            putEnergy(findTargetByCategory())
+        } else {
+            putEnergy(findEnergyTarget(room))
+        }
     }
 }
 
@@ -117,8 +147,12 @@ fun Creep.builder() {
 
 fun Creep.upgrader() {
     if (isCollecting()) {
-        //if (!ProgressState.carriersPresent)
-        collectFromClosest() // TODO
+        if (!useDistributionSystem(room))
+            collectFromClosest()
+        else {
+            if (store.getUsedCapacity() > 0)
+                memory.collecting = false // keep upgrading even if not full
+        }
     } else {
         putEnergy(room.controller)
     }
@@ -127,11 +161,22 @@ fun Creep.upgrader() {
 fun Creep.repairer() {
     if (isCollecting()) {
         //if (!ProgressState.carriersPresent
-        collectFromClosest() // TODO
+        collectFromClosest()
     } else {
+        if (getTarget() != null) {
+            if (needsRepair(getTarget())) {
+                val success =goRepair(Game.getObjectById(getTarget()?.id))
+                if (success) clearTarget()
+                return
+            } else {
+                clearTarget()
+            }
+        }
+
         // Repair critical entities
         val toRepairCritical = findCriticalRepairTarget()
         if (toRepairCritical != null) {
+            lockTarget(toRepairCritical)
             goRepair(toRepairCritical)
             return
         }
@@ -147,8 +192,10 @@ fun Creep.repairer() {
             findCloseRepairTarget(5000) ?:
             findRepairTarget(5000) ?:
             findContainerRepairTarget() ?:
-            findRepairTarget(10000)
+            findRepairTarget(10000) ?:
+            findRepairTarget(20000)
         if (toRepair != null) {
+            lockTarget(toRepair)
             goRepair(toRepair)
             return
         }
@@ -179,10 +226,15 @@ fun Creep.prospector() {
         val assignedSource = this.assignedSource(false)
         if (assignedSource == null) {
             say("No task")
+            memory.assignedSource = Memory.prospectingTargets.randomOrNull() ?: ""
             return
         }
         collectFrom(assignedSource)
     } else {
+        if (room.controller!!.ticksToDowngrade < 9000) {
+            putEnergy(room.controller)
+            return
+        }
         if (memory.homeRoom == "")
             return
         val homeRoom = Game.rooms[memory.homeRoom]
@@ -195,5 +247,23 @@ fun Creep.prospector() {
             putEnergy(container)
         else
             putEnergy(findEnergyTarget(Game.rooms[memory.homeRoom] ?: return))
+    }
+}
+
+fun Creep.claimer() {
+    memory.collecting = false
+    if (memory.assignedRoom == "")
+        return
+    val assignedRoom = Game.rooms[memory.assignedRoom]
+    if (room != assignedRoom) {
+        moveTo(RoomPosition(25, 25, memory.assignedRoom))
+        return
+    }
+    if (room.controller == null)
+        return
+    if (room.controller?.my == false) {
+        // Claim
+        if (claimController(room.controller!!) == ERR_NOT_IN_RANGE)
+            moveTo(room.controller!!.pos)
     }
 }

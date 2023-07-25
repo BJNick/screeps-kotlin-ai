@@ -8,6 +8,7 @@ import role
 import screeps.api.*
 import screeps.api.structures.*
 import screeps.utils.unsafe.jsObject
+import targetID
 import kotlin.random.Random
 
 /*object pathStyle: RoomVisual.ShapeStyle {
@@ -83,7 +84,7 @@ fun Creep.collectFromASource(fromRoom: Room = this.room) {
 /**
  * Collect from the most full harvester
  */
-fun Creep.collectFromHarvesters(fromRoom: Room = this.room) {
+fun Creep.collectFromHarvesters(fromRoom: Room = this.room, bias: RoomPosition = pos) {
 
     val harvesterCreep = fromRoom.find(FIND_MY_CREEPS, options { filter = { it.store[RESOURCE_ENERGY] > 0 &&
             (it.memory.role == Role.HARVESTER || it.memory.role == Role.SETTLER) }})
@@ -175,6 +176,9 @@ fun Creep.putEnergy(target: HasPosition?) {
         is ConstructionSite -> build(target)
         is Creep -> transfer(target, RESOURCE_ENERGY)
 
+        is StructureWall -> repair(target)
+        is StructureRampart -> repair(target)
+
         else -> if (target as? StoreOwner != null)  transfer(target, RESOURCE_ENERGY) else
             return logError("putEnergy: target $target is of unsupported structure type")
     }
@@ -182,9 +186,9 @@ fun Creep.putEnergy(target: HasPosition?) {
     moveIfNotInRange(target, err, "putEnergy")
 }
 
-fun Creep.goRepair(target: Structure?) {
-    if (target == null) return
-    moveIfNotInRange(target, repair(target), "goRepair")
+fun Creep.goRepair(target: Structure?): Boolean {
+    if (target == null) return false
+    return moveIfNotInRange(target, repair(target), "goRepair")
 }
 
 fun Creep.stackToCarriers(): Boolean {
@@ -206,13 +210,16 @@ fun Creep.stackToCarriers(): Boolean {
     return false
 }
 
-fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function: String = "moveIfNotInRange") {
+fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function: String = "moveIfNotInRange"): Boolean {
     if (err == ERR_NOT_IN_RANGE || err == ERR_NOT_ENOUGH_RESOURCES) {
         moveTo(target.pos, options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle>
             { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_SOLID } })
+        return false
     } else if (err != OK) {
         logError("$function: error $err for " + this.name)
+        return false
     }
+    return true
 }
 
 val STORE_STRUCTURES = arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER)
@@ -288,9 +295,14 @@ fun Creep.findContainerRepairTarget(): Structure? {
         .sortedBy { it.pos.getRangeTo(myRepairPriority()) }.minByOrNull { it.hits }
 }
 
-fun Creep.findEnergyTarget(room: Room): HasPosition? {
-    return arrayOf(getVacantSpawnOrExt(room), getVacantTower(room, 800), getVacantDistributorCreep(room),
-        getVacantStoreStructure(room), getConstructionSite(room), room.controller).filterNotNull().firstOrNull()
+fun Creep.findWorkEnergyTarget(room: Room): HasPosition? {
+    return getVacantSpawnOrExt(room) ?: arrayOf(getVacantTower(room, 800), findRepairTarget(200),
+        getVacantDistributorCreep(room), getConstructionSite(room), room.controller).filterNotNull().firstOrNull()
+}
+
+fun Creep.findEnergyTarget(room: Room): HasPosition? { // TODO - which creeps are using this?
+    return getVacantSpawnOrExt(room) ?: arrayOf(getVacantTower(room, 800),
+        getVacantDistributorCreep(room)).filterNotNull().randomOrNull(Random(name.hashCode()))
 }
 
 fun Creep.findDroppedEnergy(room: Room): HasPosition? {
@@ -318,4 +330,22 @@ fun Creep.findClosestContainer(): StructureContainer? {
         .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
         .sortedBy { it.structureType != STRUCTURE_TOWER }
         .minByOrNull { it.pos.getRangeTo(pos)/3 }
+}
+
+fun Creep.lockTarget(target: Identifiable?) {
+    memory.targetID = target?.id ?: ""
+}
+
+fun Creep.getTarget(): Identifiable? {
+    if (memory.targetID == "") return null
+    return Game.getObjectById(memory.targetID)
+}
+
+fun Creep.clearTarget() {
+    memory.targetID = ""
+}
+
+fun needsRepair(target: Identifiable?): Boolean {
+    if (target == null) return false
+    return target is Structure && target.hits < target.hitsMax && target.hits < 10000
 }

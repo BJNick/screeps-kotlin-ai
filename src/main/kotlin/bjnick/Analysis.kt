@@ -91,8 +91,8 @@ fun Room.pickSourceForHarvester(creep: Creep): Source {
     // ACTUALLY DO NOT TO MAKE CONSISTENT
     //val newWorkParts = creep.body.count() { it.type == WORK }
     //this.optimalHarvesters(newWorkParts)
-    // Sort by distance to creep
-    val sortedSources = sources.sortedBy { creep.pos.getRangeTo(it.pos) }
+    // Sort by distance to CONTROLLER
+    val sortedSources = sources.sortedBy { creep.room.controller?.pos?.getRangeTo(it.pos) }
     // Find the first source that has less than optimal harvesters assigned
     val source = sortedSources.firstOrNull { it.optimalHarvesters(memory.harvesterWorkParts) > it.getAssignedHarvesterArray().size }
     // If null, then just get the closest source

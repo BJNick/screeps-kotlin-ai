@@ -12,6 +12,8 @@ var CreepMemory.collecting: Boolean by memory { false }
 var CreepMemory.role: String by memory { "" }
 var CreepMemory.distributesEnergy: Boolean by memory { false }
 
+var CreepMemory.distributionCategory: Int by memory { 0 }
+
 var CreepMemory.targetID : String by memory { "" }
 var CreepMemory.targetTask : String by memory { "" }
 
@@ -50,6 +52,12 @@ var RoomMemory.sourceIDs: Array<String> by memory { arrayOf() }
 var RoomMemory.sourceHarvesterSpaces: Array<Int> by memory { arrayOf() }
 var RoomMemory.sourceAssignedHarvesters: Array<Array<String>> by memory { arrayOf() }
 
+var RoomMemory.distributionAssignments: Array<String> by memory { arrayOf() }
+
+
+
+// GLOBAL memory
+
 var Memory.forceReassignSources: Boolean by memory { false }
 
 var Memory.prospectingTargets: Array<String> by memory { arrayOf() }
@@ -58,6 +66,7 @@ var Memory.prospectingRooms: Array<String> by memory { arrayOf() }
 var Memory.ignorePlayers: Array<String> by memory { arrayOf() }
 
 var Memory.visualizeRepairs: Boolean by memory { false }
+var Memory.visualizeDyingCreeps: Boolean by memory { true }
 
 class DataPoint(val sourceEnergy: Int, val extensionEnergy: Int, val containerEnergy: Int, val time: Int)
 
