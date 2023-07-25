@@ -1,5 +1,6 @@
 package bjnick
 
+import assignedRoom
 import assignedSource
 import collecting
 import collectingPriority
@@ -84,10 +85,10 @@ fun Creep.collectFromASource(fromRoom: Room = this.room) {
 /**
  * Collect from the most full harvester
  */
-fun Creep.collectFromHarvesters(fromRoom: Room = this.room, bias: RoomPosition = pos) {
+fun Creep.collectFromHarvesters(fromRoom: Room = this.room, bias: RoomPosition = pos): Boolean {
 
     val harvesterCreep = fromRoom.find(FIND_MY_CREEPS, options { filter = { it.store[RESOURCE_ENERGY] > 0 &&
-            (it.memory.role == Role.HARVESTER || it.memory.role == Role.SETTLER) }})
+            (it.memory.role == Role.HARVESTER || it.memory.role == Role.OUTER_HARVESTER) }})
         .sortedBy { it.store[RESOURCE_ENERGY]?.times(-1) }
         .minByOrNull { it.pos.getRangeTo(this.pos)/5 }
 
@@ -96,13 +97,16 @@ fun Creep.collectFromHarvesters(fromRoom: Room = this.room, bias: RoomPosition =
         .filter { it.store[RESOURCE_ENERGY] > this.store.getFreeCapacity() }
         .minByOrNull { it.pos.getRangeTo(this.pos)/5 }
 
-    if (harvesterContainer != null) {
+    if (harvesterContainer != null && (harvesterCreep == null || harvesterCreep.store.getFreeCapacity() > 0)) {
         moveIfNotInRange(harvesterContainer, this.withdraw(harvesterContainer, RESOURCE_ENERGY), "collectEnergy")
-        return
+        return true
     }
 
-    if (harvesterCreep != null)
+    if (harvesterCreep != null) {
         moveIfNotInRange(harvesterCreep, harvesterCreep.transfer(this, RESOURCE_ENERGY), "collectEnergy")
+        return true
+    }
+    return false
 }
 
 /**
@@ -113,7 +117,7 @@ fun Creep.collectFromClosest(fromRoom: Room = this.room) {
     val takeFromCarriers = getVacantSpawnOrExt(room) == null
 
     val harvesterCreep = fromRoom.find(FIND_MY_CREEPS, options { filter = { it.store[RESOURCE_ENERGY] >= 20 &&
-            (it.memory.role == Role.HARVESTER || it.memory.role == Role.SETTLER ||
+            (it.memory.role == Role.HARVESTER || it.memory.role == Role.OUTER_HARVESTER ||
                 (it.memory.role == Role.CARRIER && takeFromCarriers)) }})
         .sortedBy { it.store[RESOURCE_ENERGY]?.times(-1) }
         .minByOrNull { it.pos.getRangeTo(this.pos)/5 }
@@ -257,6 +261,8 @@ fun Creep.getVacantDistributorCreep(room: Room): StoreOwner? {
 
 // TODO: Prioritize construction sites by type
 fun Creep.getConstructionSite(room: Room): ConstructionSite? {
+    val containerSite = room.find(FIND_CONSTRUCTION_SITES, options { filter = { it.structureType == STRUCTURE_CONTAINER } }).firstOrNull()
+    if (containerSite != null) return containerSite
     return room.find(FIND_CONSTRUCTION_SITES).sortedBy { it.pos.getRangeTo(pos) }.minByOrNull { -it.progress }
 }
 
@@ -267,6 +273,10 @@ fun Creep.findRepairTarget(hitsLowerThan: Int): Structure? {
 
 fun StructureTower.findTowerRepairTarget(hitsLowerThan: Int): Structure? {
     return room.find(FIND_STRUCTURES, options { filter = { it.hits < it.hitsMax && it.hits < hitsLowerThan } }).randomOrNull(Random(id.hashCode()))
+}
+
+fun StructureTower.findTowerRepairTarget(hitsLowerThan: Int, type: StructureConstant): Structure? {
+    return room.find(FIND_STRUCTURES, options { filter = { it.structureType == type && it.hits < it.hitsMax && it.hits < hitsLowerThan } }).randomOrNull(Random(id.hashCode()))
 }
 
 fun Creep.findCloseRepairTarget(hitsLowerThan: Int): Structure? {
@@ -291,13 +301,16 @@ fun Creep.findWallConstructionSite(): ConstructionSite? {
 
 fun Creep.findContainerRepairTarget(): Structure? {
     return room.find(FIND_STRUCTURES,
-        options { filter = { it.structureType == STRUCTURE_CONTAINER && it.hits < it.hitsMax && it.hits < 20000 } })
+        options { filter = { it.structureType == STRUCTURE_CONTAINER && it.hits < it.hitsMax && it.hits < 30000 } })
         .sortedBy { it.pos.getRangeTo(myRepairPriority()) }.minByOrNull { it.hits }
 }
 
 fun Creep.findWorkEnergyTarget(room: Room): HasPosition? {
-    return getVacantSpawnOrExt(room) ?: arrayOf(getVacantTower(room, 800), findRepairTarget(200),
-        getVacantDistributorCreep(room), getConstructionSite(room), room.controller).filterNotNull().firstOrNull()
+    // TODO This is specific to settler creeps
+    return getVacantSpawnOrExt(room) ?: arrayOf(getVacantTower(room, 800), findContainerRepairTarget(),
+        findRepairTarget(200),
+        getVacantDistributorCreep(room),
+        getConstructionSite(room), findRepairTarget(5000), room.controller).filterNotNull().firstOrNull()
 }
 
 fun Creep.findEnergyTarget(room: Room): HasPosition? { // TODO - which creeps are using this?
@@ -324,12 +337,22 @@ fun Creep.findBufferContainer(): StructureContainer? {
 }
 
 fun Creep.findClosestContainer(): StructureContainer? {
-    return room.find(FIND_STRUCTURES)
-        .filter { it.structureType == STRUCTURE_CONTAINER || it.structureType == STRUCTURE_TOWER }
+    return (room.find(FIND_STRUCTURES,
+        options { filter = { (it.structureType == STRUCTURE_CONTAINER || it.structureType == STRUCTURE_TOWER) &&
+                it.unsafeCast<StructureContainer>().store.getFreeCapacity(RESOURCE_ENERGY) > 0 } })
+            )
         .map { it.unsafeCast<StructureContainer>() }
-        .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
         .sortedBy { it.structureType != STRUCTURE_TOWER }
         .minByOrNull { it.pos.getRangeTo(pos)/3 }
+}
+
+fun Creep.findFullestContainer(): StructureContainer? {
+    return (room.find(FIND_STRUCTURES,
+        options { filter = { (it.structureType == STRUCTURE_CONTAINER) &&
+                it.unsafeCast<StructureContainer>().store.getUsedCapacity(RESOURCE_ENERGY) > 0 } })
+            )
+        .map { it.unsafeCast<StructureContainer>() }
+        .maxByOrNull { it.store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
 }
 
 fun Creep.lockTarget(target: Identifiable?) {
@@ -348,4 +371,33 @@ fun Creep.clearTarget() {
 fun needsRepair(target: Identifiable?): Boolean {
     if (target == null) return false
     return target is Structure && target.hits < target.hitsMax && target.hits < 10000
+}
+
+fun Creep.stepAwayFromBorder(): Boolean {
+    if (pos.x <= 0) {
+        move(RIGHT); return true
+    } else if (pos.x >= 49) {
+        move(LEFT); return true
+    } else if (pos.y <= 0) {
+        move(BOTTOM); return true
+    } else if (pos.y >= 49) {
+        move(TOP); return true
+    }
+    return false
+}
+
+fun Creep.moveToRoom(roomName: String): Boolean {
+    if (room.name != roomName) {
+        moveTo(RoomPosition(25, 25, roomName), options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle>
+        { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_SOLID } })
+        return true
+    }
+    return false
+}
+
+fun Creep.gotoAssignedRoom(): Boolean {
+    if (memory.assignedRoom != "") {
+        return moveToRoom(memory.assignedRoom)
+    }
+    return false
 }

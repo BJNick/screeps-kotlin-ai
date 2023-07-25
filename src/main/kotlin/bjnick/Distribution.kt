@@ -84,8 +84,8 @@ fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
                 .minByOrNull { it.store.getUsedCapacity() }
 
         TOWERS -> // Supply towers
-            room.find(FIND_MY_STRUCTURES, options { filter = { it.structureType == STRUCTURE_TOWER &&
-                    it.unsafeCast<StoreOwner>().store.getFreeCapacity() > 0 } })
+            room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_TOWER &&
+                    it.unsafeCast<StoreOwner>().store.getFreeCapacity(RESOURCE_ENERGY) > 0 } })
                 .minByOrNull { it.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
 
         else -> null

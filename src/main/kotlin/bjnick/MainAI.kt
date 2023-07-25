@@ -25,13 +25,15 @@ class ProgressState {
 fun gameLoop() {
     val mainSpawn: StructureSpawn = Game.spawns.values.firstOrNull() ?: return
 
-    defendRoom(mainSpawn.room)
+    Game.rooms.values.forEach {
+        defendRoom(it)
+    }
 
     //delete memories of creeps that have passed away
-    houseKeeping(Game.creeps, mainSpawn.room)
+    houseKeeping(Game.creeps)
 
     // just an example of how to use room memory
-    mainSpawn.room.memory.numberOfCreeps = mainSpawn.room.find(FIND_CREEPS).count()
+    //mainSpawn.room.memory.numberOfCreeps = mainSpawn.room.find(FIND_CREEPS).count()
 
     //make sure we have at least some creeps
     spawnCreeps(Game.creeps.values, mainSpawn)
@@ -63,8 +65,8 @@ fun gameLoop() {
     // Show prospector info
     val prospectorX = 14.0
     val prospectorY = 2.5
-    Game.creeps.values.filter { it.memory.role == Role.PROSPECTOR }.forEachIndexed { index, it ->
-        mainSpawn.room.showProspectorInfo(it, prospectorX, prospectorY + index*3)
+    Game.creeps.values.filter { it.memory.role == Role.PROSPECTOR || it.memory.role == Role.SETTLER }.forEachIndexed { index, it ->
+        mainSpawn.room.showProspectorInfo(it, prospectorX, prospectorY + index*2)
     }
 
     if (Memory.forceReassignSources) {
@@ -95,7 +97,11 @@ fun gameLoop() {
         }
     }
 
-    recordGraph(mainSpawn.room, 15, 15.0, 48.0)
+    // Show graph for reach owned room
+    Game.rooms.values.forEach {
+        recordGraph(it, 15, 15.0, 48.0)
+    }
+
 }
 
 fun Room.showCreepList(role: String, x: Double, y: Double) {
@@ -122,18 +128,19 @@ fun Room.showProspectorInfo(creep: Creep?, x: Double, y: Double) {
     this.visual.text("$prospectorInventory, d$prospectorDistance", x, y + 0.75,
         options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })
     val lastTripDuration = creep.memory.lastTripDuration
-    this.visual.text("${creep.memory.prospectedCount}T, time: $lastTripDuration", x, y + 1.5,
-        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })
+    /*this.visual.text("${creep.memory.prospectedCount}T, time: $lastTripDuration", x, y + 1.5,
+        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })*/
 }
 
-private fun houseKeeping(creeps: Record<String, Creep>, room: Room) {
+private fun houseKeeping(creeps: Record<String, Creep>) {
     if (Game.creeps.isEmpty()) return  // this is needed because Memory.creeps is undefined
 
     for ((creepName, _) in Memory.creeps) {
         if (creeps[creepName] == null) {
             console.log("deleting obsolete memory entry for creep $creepName")
             unassignSource(creepName)
-            unassignDistribution(creepName, room)
+            for (room in Game.rooms.values)
+                unassignDistribution(creepName, room)
             if (Memory.creeps[creepName]?.role == Role.HARVESTER)
                 Memory.forceReassignSources = true
 
@@ -168,7 +175,9 @@ fun defendRoom(room: Room) {
         towers.forEach { tower -> tower.heal(damagedCreeps[0]) }
     } else {
         towers.forEach {
-            val repairTarget = it.findTowerRepairTarget(500) ?: it.findTowerRepairTarget(5000)
+            val repairTarget = it.findTowerRepairTarget(500) ?:
+                it.findTowerRepairTarget(30000, STRUCTURE_CONTAINER) ?:
+                it.findTowerRepairTarget(5000)
             if (repairTarget != null)
                 it.repair(repairTarget)
         }

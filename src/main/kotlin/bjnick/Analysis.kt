@@ -91,8 +91,8 @@ fun Room.pickSourceForHarvester(creep: Creep): Source {
     // ACTUALLY DO NOT TO MAKE CONSISTENT
     //val newWorkParts = creep.body.count() { it.type == WORK }
     //this.optimalHarvesters(newWorkParts)
-    // Sort by distance to CONTROLLER
-    val sortedSources = sources.sortedBy { creep.room.controller?.pos?.getRangeTo(it.pos) }
+    // Sort by distance to SELF!!
+    val sortedSources = sources.sortedBy { creep.pos.getRangeTo(it.pos) }
     // Find the first source that has less than optimal harvesters assigned
     val source = sortedSources.firstOrNull { it.optimalHarvesters(memory.harvesterWorkParts) > it.getAssignedHarvesterArray().size }
     // If null, then just get the closest source
@@ -154,30 +154,38 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
     // If Game.time % N == 0, then record new point, else add to last point
     if (Game.time % every == 0) {
         val combined = DataPoint(sourceEnergy/every, extensionEnergy/every, containerEnergy/every, Game.time)
-        Memory.energyGraphData += combined
+        room.memory.energyGraphData += combined
     } else {
-        val lastPoint = Memory.energyGraphData[Memory.energyGraphData.size-1]
-        Memory.energyGraphData[Memory.energyGraphData.size-1] =
-            DataPoint(lastPoint.sourceEnergy + sourceEnergy/every,
-                lastPoint.extensionEnergy + extensionEnergy/every,
-                lastPoint.containerEnergy + containerEnergy/every, lastPoint.time)
+        if (room.memory.energyGraphData.isNotEmpty()) {
+            val lastPoint = room.memory.energyGraphData[room.memory.energyGraphData.size - 1]
+            room.memory.energyGraphData[room.memory.energyGraphData.size - 1] =
+                DataPoint(
+                    lastPoint.sourceEnergy + sourceEnergy / every,
+                    lastPoint.extensionEnergy + extensionEnergy / every,
+                    lastPoint.containerEnergy + containerEnergy / every, lastPoint.time
+                )
+        }
     }
+    if (room.memory.energyGraphData.isEmpty()) {
+        return
+    }
+
     // Trim Memory to max points
-    Memory.energyGraphData = Memory.energyGraphData.takeLast(maxPoints+1).toTypedArray()
+    room.memory.energyGraphData = room.memory.energyGraphData.takeLast(maxPoints+1).toTypedArray()
     val separation = 1
     val xOffset = x-maxPoints*separation/2
 
-    val extensionPolyLine = Memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+    val extensionPolyLine = room.memory.energyGraphData.dropLast(1).takeLast(maxPoints)
         .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.extensionEnergy*0.005+y)
     }.toTypedArray()
     room.visual.poly(extensionPolyLine, options { stroke = "#FFFF00"; opacity = 0.5 })
 
-    val sourcePolyLine = Memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+    val sourcePolyLine = room.memory.energyGraphData.dropLast(1).takeLast(maxPoints)
         .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.sourceEnergy*0.001+y)
         }.toTypedArray()
     room.visual.poly(sourcePolyLine, options { stroke = "#FFFFFF"; opacity = 0.5 })
 
-    val containerPolyLine = Memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+    val containerPolyLine = room.memory.energyGraphData.dropLast(1).takeLast(maxPoints)
         .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.containerEnergy*0.001+y)
         }.toTypedArray()
     room.visual.poly(containerPolyLine, options { stroke = "#FFAA00"; opacity = 0.5 })
@@ -192,9 +200,9 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
         options { color = "#FFAA00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
 
     val drawnPoints = extensionPolyLine.size
-    val lastExtensionEnergy = Memory.energyGraphData[Memory.energyGraphData.size-2].extensionEnergy
-    val lastSourceEnergy = Memory.energyGraphData[Memory.energyGraphData.size-2].sourceEnergy
-    val lastContainerEnergy = Memory.energyGraphData[Memory.energyGraphData.size-2].containerEnergy
+    val lastExtensionEnergy = room.memory.energyGraphData[room.memory.energyGraphData.size-2].extensionEnergy
+    val lastSourceEnergy = room.memory.energyGraphData[room.memory.energyGraphData.size-2].sourceEnergy
+    val lastContainerEnergy = room.memory.energyGraphData[room.memory.energyGraphData.size-2].containerEnergy
 
     // Add label to last point
     room.visual.text("$lastExtensionEnergy", extensionPolyLine[drawnPoints-1][0]+0.25,

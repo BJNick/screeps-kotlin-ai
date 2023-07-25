@@ -23,6 +23,7 @@ object Role {
     val REPAIRER = "REPAIRER"
     val PROSPECTOR = "PROSPECTOR"
     val CLAIMER = "CLAIMER"
+    val OUTER_HARVESTER = "OUTER_HARVESTER"
 }
 
 fun Creep.executeRole() {
@@ -37,6 +38,7 @@ fun Creep.executeRole() {
         Role.REPAIRER -> repairer()
         Role.PROSPECTOR -> prospector()
         Role.CLAIMER -> claimer()
+        Role.OUTER_HARVESTER -> outer_harvester()
     }
 }
 
@@ -49,33 +51,10 @@ fun Creep.pathColor() = when (memory.role) {
     Role.UPGRADER -> "#FF00FF"
     Role.REPAIRER -> "#00FFFF"
     Role.PROSPECTOR -> "#FFAA00"
+    Role.OUTER_HARVESTER -> "#0000FF"
     else -> "#FFFFFF"
 }
 
-
-fun Creep.settler() {
-    memory.assignedRoom = "E58N45" // TODO FOR THIS RUN ONLY
-    // For settling in nearby rooms
-    if (memory.assignedRoom != "") {
-        val assignedRoom = Game.rooms[memory.assignedRoom]
-        if (room != assignedRoom) {
-            if (memory.assignedSource != "")
-                unassignSource(name)
-            moveTo(assignedRoom?.controller?.pos ?: return)
-            return
-        }
-    }
-
-    if (isCollecting()) {
-        collectFromASource()
-    } else {
-        //if (!ProgressState.carriersPresent)
-        if (room.controller!!.ticksToDowngrade < 9000)
-            putEnergy(room.controller)
-        else
-            putEnergy(findWorkEnergyTarget(room))
-    }
-}
 
 
 fun Creep.carrier() {
@@ -88,11 +67,13 @@ fun Creep.carrier() {
         findDroppedEnergy(room)?.let {
             collectFrom(it); return
         }
-        if (useDistributionSystem(room)) {
+        var success = if (useDistributionSystem(room)) {
             collectFromHarvesters(room, pickupLocationBias())
         } else {
             collectFromHarvesters()
         }
+        if (!success && store.getUsedCapacity() > 0)
+            memory.collecting = false // keep distributing even if not full
     } else {
         if (useDistributionSystem(room)) {
             if (memory.distributionCategory == 0)
@@ -107,7 +88,8 @@ fun Creep.carrier() {
 fun Creep.harvester() {
     val container = findBufferContainer()
     if (isCollecting() || ProgressState.carriersPresent) { // ??? present check
-        collectFromASource()
+        if (store.getFreeCapacity() > 0)
+            collectFromASource()
         if (container != null)
             this.transfer(container, RESOURCE_ENERGY)
     } else {
@@ -121,6 +103,15 @@ fun Creep.harvester() {
 }
 
 fun Creep.builder() {
+    if (room.energyAvailable < room.energyCapacityAvailable &&
+        room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_CONTAINER } } )
+            .sumOf { it.unsafeCast<StoreOwner>().store[RESOURCE_ENERGY] ?: 0 } < 500) {
+        // Wait until more energy is available
+        if (store.getUsedCapacity() > 0)
+            putEnergy(getVacantSpawnOrExt(room))
+        return
+    }
+
     if (isCollecting()) {
         //if (!ProgressState.carriersPresent)
         collectFromClosest() // TODO
@@ -189,9 +180,9 @@ fun Creep.repairer() {
         }
         // Repair entities with lowest hits first
         val toRepair = findRepairTarget(200) ?:
+            findContainerRepairTarget() ?:
             findCloseRepairTarget(5000) ?:
             findRepairTarget(5000) ?:
-            findContainerRepairTarget() ?:
             findRepairTarget(10000) ?:
             findRepairTarget(20000)
         if (toRepair != null) {
@@ -266,4 +257,59 @@ fun Creep.claimer() {
         if (claimController(room.controller!!) == ERR_NOT_IN_RANGE)
             moveTo(room.controller!!.pos)
     }
+}
+
+fun Creep.settler() {
+    if (stepAwayFromBorder()) return
+    memory.homeRoom = "E59N45"
+    memory.assignedRoom = "E58N45" // TODO FOR THIS RUN ONLY
+
+    if (isCollecting()) {
+        if (gotoAssignedRoom()) return
+
+        if (findClosestContainer() != null) {
+            if (memory.assignedSource == "")
+                unassignSource(name)
+            collectFrom(findFullestContainer())
+        } else {
+            collectFromASource()
+        }
+    } else {
+        //if (!ProgressState.carriersPresent)
+        if (room.controller!!.ticksToDowngrade < 9000)
+            putEnergy(room.controller)
+        else {
+            val target = findWorkEnergyTarget(room)
+            if (target == room.controller || room.name == memory.homeRoom) {
+                // TODO REVERT TO PROSPECTOR BEHAVIOR
+                if (memory.homeRoom == "")
+                    return
+                val homeRoom = Game.rooms[memory.homeRoom]
+                if (room != homeRoom || pos.x == 0) {  // TODO boundary check
+                    moveTo(RoomPosition(25, 25, memory.homeRoom))
+                    return
+                }
+                val container = findClosestContainer()
+                if (container != null) {
+                    say("Container")
+                    putEnergy(container)
+                } else {
+                    putEnergy(findEnergyTarget(Game.rooms[memory.homeRoom] ?: return))
+                }
+            } else {
+                putEnergy(findWorkEnergyTarget(room))
+            }
+        }
+    }
+}
+
+fun Creep.outer_harvester() {
+    if (stepAwayFromBorder()) return
+    memory.homeRoom = "E59N45"
+    memory.assignedRoom = "E58N45" // TODO FOR THIS RUN ONLY
+    // For settling in nearby rooms
+    if (isCollecting() && gotoAssignedRoom()) return
+
+    // Then do basic harvester stuff
+    harvester()
 }

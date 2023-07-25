@@ -70,7 +70,7 @@ var Memory.visualizeDyingCreeps: Boolean by memory { true }
 
 class DataPoint(val sourceEnergy: Int, val extensionEnergy: Int, val containerEnergy: Int, val time: Int)
 
-var Memory.energyGraphData: Array<DataPoint> by memory { arrayOf() }
+var RoomMemory.energyGraphData: Array<DataPoint> by memory { arrayOf() }
 
 /* spawn.memory */
 //var SpawnMemory.test: Int by memory { 0 }
