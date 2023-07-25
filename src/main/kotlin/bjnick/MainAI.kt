@@ -103,6 +103,9 @@ fun gameLoop() {
         recordGraph(it, 15, 15.0, 48.0)
     }
 
+    // TODO REMOVE
+    // test()
+
 }
 
 fun Room.showCreepList(role: String, x: Double, y: Double) {

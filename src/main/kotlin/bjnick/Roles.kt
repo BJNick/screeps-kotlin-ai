@@ -212,11 +212,8 @@ fun Creep.prospector() {
     if (isCollecting()) {
         if (memory.assignedRoom == "")
             return
-        val assignedRoom = Game.rooms[memory.assignedRoom]
-        if (room != assignedRoom) {
-            moveTo(RoomPosition(25, 25, memory.assignedRoom))
-            return
-        }
+        if (gotoAssignedRoom()) return
+
         val assignedSource = this.assignedSource(false)
         if (assignedSource == null) {
             say("No task")
