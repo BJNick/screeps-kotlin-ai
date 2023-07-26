@@ -6,12 +6,15 @@ import collecting
 import collectingPriority
 import distributesEnergy
 import homeRoom
+import lastRoom
 import role
 import screeps.api.*
 import screeps.api.structures.*
 import screeps.utils.unsafe.jsObject
 import settlementRoom
 import targetID
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.random.Random
 
 /*object pathStyle: RoomVisual.ShapeStyle {
@@ -71,6 +74,15 @@ fun Creep.myRepairPriority(): RoomPosition {
         else -> edge2
     }
     return priority
+}
+
+fun Creep.cornerBias(): RoomPosition {
+    return when (name.hashCode() % 4) {
+        0 -> RoomPosition(0, 0, room.name)
+        1 -> RoomPosition(49, 0, room.name)
+        2 -> RoomPosition(0, 49, room.name)
+        else -> RoomPosition(49, 49, room.name)
+    }
 }
 
 fun Creep.myRepairRandomSeed(): Int {
@@ -221,9 +233,7 @@ fun Creep.stackToCarriers(): Boolean {
 fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function: String = "moveIfNotInRange"): Boolean {
     if (err == ERR_NOT_IN_RANGE || err == ERR_NOT_ENOUGH_RESOURCES) {
 
-        moveTo(target.pos, options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle>
-                { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_DASHED };
-            costCallback = ::costCallbackAvoidBorder; ignoreCreeps = nearBorder() || !hasCreepsNearby(1)  })
+        moveWithin(target.pos, 0)
 
         return false
     } else if (err != OK) {
@@ -231,6 +241,15 @@ fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function
         return false
     }
     return true
+}
+
+fun Creep.moveWithin(target: RoomPosition, dist: Int = 0): ScreepsReturnCode {
+    if (pos.getRangeTo(target) > dist) {
+        return moveTo(target, options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle>
+                { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_DASHED };
+            costCallback = ::costCallbackAvoidBorder; ignoreCreeps = nearBorder() || !hasCreepsNearby(1)  })
+    }
+    return OK
 }
 
 fun costCallbackAvoidBorder(roomName: String, costMatrix: PathFinder.CostMatrix): PathFinder.CostMatrix {
@@ -482,3 +501,17 @@ fun Room.getTotalContainerEnergy(): Int {
         .map { it.unsafeCast<StructureContainer>().store[RESOURCE_ENERGY] ?: 0 }.sum()
 }
 
+fun Creep.recordBorderMovements() {
+    if (atBorder()) {
+        if (memory.lastRoom == memory.assignedRoom && room.name == memory.homeRoom ||
+            room.name == memory.assignedRoom && memory.lastRoom == memory.homeRoom)
+            recordImportExport(memory.lastRoom, room.name, store.getUsedCapacity())
+    }
+    if (nearBorder()) {
+        memory.lastRoom = room.name
+    }
+}
+
+fun bindCoordinate(v: Int): Int {
+    return max(0, min(49, v))
+}

@@ -60,12 +60,15 @@ var RoomMemory.distributionAssignments: Array<String> by memory { arrayOf() }
 // GLOBAL memory
 
 var Memory.forceReassignSources: Boolean by memory { false }
+var Memory.forceReassignDistributionCategories: Boolean by memory { false }
 
 var Memory.prospectingTargets: Array<String> by memory { arrayOf() }
 var Memory.prospectingRooms: Array<String> by memory { arrayOf() }
 
 var Memory.homeRoom: String by memory { "" }
 var Memory.settlementRoom: String by memory { "" }
+
+var Memory.defendRoom: String by memory { "" }
 
 var Memory.ignorePlayers: Array<String> by memory { arrayOf() }
 

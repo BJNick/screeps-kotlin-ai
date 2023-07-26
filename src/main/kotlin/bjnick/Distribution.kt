@@ -31,14 +31,9 @@ fun pickDistributionCategory(creep: Creep, room: Room) {
             return
         }
     }
-    // None selected above, select what's most needed
-    if (room.energyAvailable - room.energyCapacityAvailable < 0) {
-        assignDistribution(creep, room, SPAWN)
-        return
-    } else {
-        assignDistribution(creep, room, CONTROLLER)
-        return
-    }
+    // None selected above, select a random one
+    val category = creep.name.hashCode() % (catCount()-1) + 1
+    assignDistribution(creep, room, intToCat(category))
 }
 
 fun initializeRoomDistribution(room: Room) {
@@ -67,6 +62,8 @@ fun useDistributionSystem(room: Room): Boolean {
 
 fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
     var category = this.memory.distributionCategory
+    if (category == 0) pickDistributionCategory(this, room)
+    category = this.memory.distributionCategory
     if (category == 0) category = name.hashCode() % (catCount()-1) + 1
     val duty = when (intToCat(category)) {
 
@@ -95,6 +92,8 @@ fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
 
 fun Creep.pickupLocationBias(): RoomPosition {
     var category = this.memory.distributionCategory
+    if (category == 0) pickDistributionCategory(this, room)
+    category = this.memory.distributionCategory
     if (category == 0) category = name.hashCode() % (catCount()-1) + 1
 
     val biasPos = when (intToCat(category)) {

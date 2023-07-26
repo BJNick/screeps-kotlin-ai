@@ -88,6 +88,19 @@ fun optimizedBuilder(maxEnergy: Int): bodyArray {
     }} + Array(maxSmallParts) { MOVE }
 }
 
+fun bestRangedFighter(maxEnergy: Int): bodyArray {
+    val maxBigParts = maxEnergy / 200
+    val remainingEnergy = maxEnergy - 50 - maxBigParts*200
+    val maxSmallParts = remainingEnergy / 60
+    return Array(maxSmallParts*2) { i -> when (i%2) {
+        0 -> TOUGH
+        else -> MOVE
+    }} + Array(maxBigParts*2) { i -> when (i%2) {
+        0 -> MOVE
+        else -> RANGED_ATTACK
+    }}
+}
+
 // Make a name based on tick and role
 fun newName(role: String): String {
     // Ticks should be converted to letters: any, vowel, any
@@ -117,6 +130,10 @@ fun spawnCreeps(
         creeps.count { it.memory.role == Role.HARVESTER && it.ticksToLive>150 } < harvesterCount -> Pair(Role.HARVESTER, bestWorker(capacity))
 
         creeps.count { it.memory.role == Role.CARRIER } < 4 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
+
+        // MILITARY
+        creeps.count { it.memory.role == Role.RANGER && it.ticksToLive>200 } < 1 -> Pair(Role.RANGER, bestRangedFighter(UNLIMITED))
+        ///
 
         creeps.count { it.memory.role == Role.UPGRADER } < 2 -> Pair(Role.UPGRADER, bestWorker(capacity))
 
@@ -151,12 +168,12 @@ fun spawnCreeps(
         creeps.count { it.memory.role == Role.SETTLER } < 2 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
 
 
-        creeps.count { it.memory.role == Role.FREIGHTER } < 1 -> Pair(Role.FREIGHTER, bestOnRoad(UNLIMITED))
+        creeps.count { it.memory.role == Role.CARAVAN } < 1 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED))
 
 
         creeps.count { it.memory.role == Role.OUTER_HARVESTER } < 4 -> Pair(Role.OUTER_HARVESTER, bestFastWorker(capacity))
 
-        creeps.count { it.memory.role == Role.FREIGHTER } < 2 -> Pair(Role.FREIGHTER, bestOnRoad(UNLIMITED))
+        creeps.count { it.memory.role == Role.CARAVAN } < 2 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED))
 
         creeps.count { it.memory.role == Role.SETTLER } < 4 && creeps.count { it.memory.role != Role.SETTLER && it.ticksToLive<100 } == 0 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
 

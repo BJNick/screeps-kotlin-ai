@@ -1,9 +1,9 @@
 package bjnick
 
+import forceReassignDistributionCategories
 import forceReassignSources
 import ignorePlayers
 import lastTripDuration
-import numberOfCreeps
 import prospectedCount
 import role
 import screeps.api.*
@@ -65,7 +65,7 @@ fun gameLoop() {
     // Show prospector info
     val prospectorX = 14.0
     val prospectorY = 2.5
-    Game.creeps.values.filter { it.memory.role in arrayOf(Role.PROSPECTOR, Role.SETTLER, Role.OUTER_HARVESTER, Role.FREIGHTER) }
+    Game.creeps.values.filter { it.memory.role in arrayOf(Role.PROSPECTOR, Role.SETTLER, Role.OUTER_HARVESTER, Role.CARAVAN, Role.RANGER) }
         .sortedBy { it.memory.role }
         .forEachIndexed { index, it ->
         mainSpawn.room.showProspectorInfo(it, prospectorX, prospectorY + index*2)
@@ -76,6 +76,13 @@ fun gameLoop() {
             unassignSource(creepName)
         }
         Memory.forceReassignSources = false
+    }
+
+    if (Memory.forceReassignDistributionCategories) {
+        for ((creepName, _) in Memory.creeps) {
+            unassignDistribution(creepName, mainSpawn.room) // TODO: generalize
+        }
+        Memory.forceReassignDistributionCategories = false
     }
 
     // When controller reaches lvl 3, place a tower construction site at the flag "TowerSpot"
@@ -149,6 +156,8 @@ private fun houseKeeping(creeps: Record<String, Creep>) {
                 unassignDistribution(creepName, room)
             if (Memory.creeps[creepName]?.role == Role.HARVESTER)
                 Memory.forceReassignSources = true
+            if (Memory.creeps[creepName]?.role == Role.CARRIER)
+                Memory.forceReassignDistributionCategories = true
 
             // If prospector, send report
             if (Memory.creeps[creepName]?.role == Role.PROSPECTOR) {
@@ -175,7 +184,7 @@ fun defendRoom(room: Room) {
         if (!(Memory.ignorePlayers.contains(username)))
             towers.forEach { tower -> tower.attack(hostiles[0]) }
         // ACTIVATE SAFE MODE
-        if (room.controller?.safeModeAvailable > 0 && room.controller?.safeModeCooldown == 0)
+        if (room.controller?.safeModeAvailable > 0)
             room.controller?.activateSafeMode()
     } else if (damagedCreeps.isNotEmpty()) {
         towers.forEach { tower -> tower.heal(damagedCreeps[0]) }
