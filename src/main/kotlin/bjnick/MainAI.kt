@@ -65,7 +65,8 @@ fun gameLoop() {
     // Show prospector info
     val prospectorX = 14.0
     val prospectorY = 2.5
-    Game.creeps.values.filter { it.memory.role == Role.PROSPECTOR || it.memory.role == Role.SETTLER || it.memory.role == Role.OUTER_HARVESTER }
+    Game.creeps.values.filter { it.memory.role in arrayOf(Role.PROSPECTOR, Role.SETTLER, Role.OUTER_HARVESTER, Role.FREIGHTER) }
+        .sortedBy { it.memory.role }
         .forEachIndexed { index, it ->
         mainSpawn.room.showProspectorInfo(it, prospectorX, prospectorY + index*2)
     }
@@ -123,14 +124,15 @@ fun Room.showProspectorInfo(creep: Creep?, x: Double, y: Double) {
             options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT })
         return
     }
+    val creepColor = creep.pathColor()
     // Say the prospector name, inventory content, and distance from spawn
     val prospectorName = creep.name
     val prospectorInventory = "${creep.store.getUsedCapacity()}/${creep.store.getCapacity()}"
     val prospectorDistance = 80 - creep.pos.x - if (creep.room == this) 50 else 0//creep.pos.getRangeTo(this.find(FIND_MY_SPAWNS)[0])
     this.visual.text("${creep.memory.role.lowercase().capitalize()} $prospectorName", x, y,
-        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })
+        options { color = creepColor; align = TEXT_ALIGN_LEFT; font = "0.5"; opacity = 0.7 })
     this.visual.text("$prospectorInventory, d$prospectorDistance", x, y + 0.75,
-        options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })
+        options { color = creepColor; align = TEXT_ALIGN_LEFT; font = "0.5"; opacity = 0.7 })
     val lastTripDuration = creep.memory.lastTripDuration
     /*this.visual.text("${creep.memory.prospectedCount}T, time: $lastTripDuration", x, y + 1.5,
         options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })*/

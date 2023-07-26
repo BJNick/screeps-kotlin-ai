@@ -10,6 +10,7 @@ import role
 import screeps.api.*
 import screeps.api.structures.*
 import screeps.utils.unsafe.jsObject
+import settlementRoom
 import targetID
 import kotlin.random.Random
 
@@ -219,8 +220,11 @@ fun Creep.stackToCarriers(): Boolean {
 
 fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function: String = "moveIfNotInRange"): Boolean {
     if (err == ERR_NOT_IN_RANGE || err == ERR_NOT_ENOUGH_RESOURCES) {
+
         moveTo(target.pos, options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle>
-            { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_SOLID } })
+                { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_DASHED };
+            costCallback = ::costCallbackAvoidBorder; ignoreCreeps = nearBorder() || !hasCreepsNearby(1)  })
+
         return false
     } else if (err != OK) {
         logError("$function: error $err for " + this.name)
@@ -229,16 +233,67 @@ fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function
     return true
 }
 
+fun costCallbackAvoidBorder(roomName: String, costMatrix: PathFinder.CostMatrix): PathFinder.CostMatrix {
+    val newCost = 6 // 6 is more than swamp 5
+    for (x in 0..49) {
+        costMatrix[x, 0] = newCost
+        costMatrix[x, 49] = newCost
+    }
+    for (y in 0..49) {
+        costMatrix[0, y] = newCost
+        costMatrix[49, y] = newCost
+    }
+    return costMatrix
+}
+
+fun Creep.nearBorder(): Boolean {
+    return pos.x <= 1 || pos.x >= 48 || pos.y <= 1 || pos.y >= 48
+}
+
+fun Creep.atBorder(): Boolean {
+    return pos.x <= 0 || pos.x >= 49 || pos.y <= 0 || pos.y >= 49
+}
+
+fun Creep.simpleMove(target: RoomPosition) {
+    // Draw a dashed line one tile long towards the target
+    room.visual.poly(arrayOf(pos, target), options { stroke = pathColor(); lineStyle = LINE_STYLE_DASHED; opacity = 0.2 })
+
+    if (pos.roomName != target.roomName) return
+    if (target.x < pos.x) {
+        if (target.y < pos.y) {
+            move(TOP_LEFT)
+        } else if (target.y == pos.y) {
+            move(LEFT)
+        } else if (target.y > pos.y) {
+            move(BOTTOM_LEFT)
+        }
+    } else if (target.x == pos.x) {
+        if (target.y < pos.y) {
+            move(TOP)
+        } else if (target.y > pos.y) {
+            move(BOTTOM)
+        }
+    } else if (target.x > pos.x) {
+        if (target.y < pos.y) {
+            move(TOP_RIGHT)
+        } else if (target.y == pos.y) {
+            move(RIGHT)
+        } else if (target.y > pos.y) {
+            move(BOTTOM_RIGHT)
+        }
+    }
+}
+
+fun Creep.hasCreepsNearby(radius: Int): Boolean {
+    return room.lookAtAreaAsArray(pos.y - radius, pos.x - radius, pos.y + radius, pos.x + radius)
+        .any { it.type == LOOK_CREEPS && it.creep != null && it.creep!!.my && it.creep!!.id != id }
+}
+
 val STORE_STRUCTURES = arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER)
 
 // TODO: Save this for use in all creeps
 fun Creep.getVacantSpawnOrExt(room: Room): StoreOwner? {
-    return room.find(FIND_STRUCTURES, options {
-        filter = { it.structureType in arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION) }
-    })
-        .map { it.unsafeCast<StoreOwner>() }
-        .filter { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
-        .minByOrNull { it.pos.getRangeTo(myCollectingPriority()) } // CLOSEST ???
+    return room.bySort(arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION), f = hasFreeCapacity, sort = byDistance(pos))
 }
 
 fun Creep.getVacantTower(room: Room, maxEnergy: Int): StoreOwner? {
@@ -324,11 +379,11 @@ fun Creep.findEnergyTarget(room: Room): HasPosition? { // TODO - which creeps ar
 fun Creep.findDroppedEnergy(room: Room): HasPosition? {
     val tombs = room.find(FIND_TOMBSTONES, options { filter = { it.store[RESOURCE_ENERGY] > 0 } })
     val dropped = room.find(FIND_DROPPED_RESOURCES, options { filter = { it.resourceType == RESOURCE_ENERGY && it.amount > 0 } })
-    return (dropped + tombs).maxByOrNull { when (it) {
+    return (dropped + tombs).maxByOrNull (byDistance(pos).reversed() then { when (it) {
         is Tombstone -> it.store[RESOURCE_ENERGY] ?: 0
         is Resource -> it.amount
         else -> 0
-    }}
+    }})
 }
 
 fun Creep.findBufferContainer(): StructureContainer? {
@@ -411,3 +466,19 @@ fun Creep.gotoHomeRoom(): Boolean {
     }
     return false
 }
+
+fun Creep.loadAssignedRoomAndHome(): Boolean {
+    memory.homeRoom = Memory.homeRoom
+    memory.assignedRoom = Memory.settlementRoom
+    if (memory.homeRoom == "" || memory.assignedRoom == "") {
+        console.log("$name: No home/assigned room")
+        return false
+    }
+    return true
+}
+
+fun Room.getTotalContainerEnergy(): Int {
+    return find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_CONTAINER || it.structureType == STRUCTURE_STORAGE } })
+        .map { it.unsafeCast<StructureContainer>().store[RESOURCE_ENERGY] ?: 0 }.sum()
+}
+

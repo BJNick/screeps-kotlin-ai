@@ -143,6 +143,35 @@ fun Room.placeExtensionSites(count: Int) {
     }
 }
 
+fun recordImportExport(from: String, to: String, amount: Int)  {
+    if (Game.rooms[from]!!.memory.energyGraphData.isNotEmpty()) {
+        val room = Game.rooms[from]!!
+        val lastPoint = room.memory.energyGraphData[room.memory.energyGraphData.size - 1]
+        room.memory.energyGraphData[room.memory.energyGraphData.size - 1] =
+            DataPoint(
+                lastPoint.sourceEnergy,
+                lastPoint.extensionEnergy,
+                lastPoint.containerEnergy,
+                lastPoint.time,
+                lastPoint.imports,
+                lastPoint.exports + amount,
+            )
+    }
+    if (Game.rooms[to]!!.memory.energyGraphData.isNotEmpty()) {
+        val room = Game.rooms[to]!!
+        val lastPoint = room.memory.energyGraphData[room.memory.energyGraphData.size - 1]
+        room.memory.energyGraphData[room.memory.energyGraphData.size - 1] =
+            DataPoint(
+                lastPoint.sourceEnergy,
+                lastPoint.extensionEnergy,
+                lastPoint.containerEnergy,
+                lastPoint.time,
+                lastPoint.imports + amount,
+                lastPoint.exports,
+            )
+    }
+}
+
 fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
     // Then graph the last 5 points (if there are 5 points)
     val maxPoints = 30
@@ -153,7 +182,8 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
     val sourceEnergy = room.find(FIND_SOURCES).sumOf { it.energy }
     // If Game.time % N == 0, then record new point, else add to last point
     if (Game.time % every == 0) {
-        val combined = DataPoint(sourceEnergy/every, extensionEnergy/every, containerEnergy/every, Game.time)
+        val combined = DataPoint(sourceEnergy/every, extensionEnergy/every, containerEnergy/every,
+            Game.time, 0, 0)
         room.memory.energyGraphData += combined
     } else {
         if (room.memory.energyGraphData.isNotEmpty()) {
@@ -162,7 +192,9 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
                 DataPoint(
                     lastPoint.sourceEnergy + sourceEnergy / every,
                     lastPoint.extensionEnergy + extensionEnergy / every,
-                    lastPoint.containerEnergy + containerEnergy / every, lastPoint.time
+                    lastPoint.containerEnergy + containerEnergy / every, lastPoint.time,
+                    lastPoint.imports,
+                    lastPoint.exports,
                 )
         }
     }
@@ -190,19 +222,34 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
         }.toTypedArray()
     room.visual.poly(containerPolyLine, options { stroke = "#FFAA00"; opacity = 0.5 })
 
+    val importsPolyLine = room.memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+        .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.imports*0.003+y)
+        }.toTypedArray()
+    room.visual.poly(importsPolyLine, options { stroke = "#00FF00"; opacity = 0.5 })
+
+    val exportsPolyLine = room.memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+        .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.exports*0.003+y)
+        }.toTypedArray()
+    room.visual.poly(exportsPolyLine, options { stroke = "#FF0000"; opacity = 0.5 })
 
     val maxStartPointHeight = min(min(extensionPolyLine[0][1], sourcePolyLine[0][1]), containerPolyLine[0][1])
-    room.visual.text("Source", xOffset, maxStartPointHeight-1-0.5,
+    room.visual.text("Source", xOffset, maxStartPointHeight-1-1.5,
         options { color = "#FFFFFF"; font = "0.5"; align = TEXT_ALIGN_LEFT })
-    room.visual.text("Extension", xOffset, maxStartPointHeight-0.5-0.5,
+    room.visual.text("Extension", xOffset, maxStartPointHeight-0.5-1.5,
         options { color = "#FFFF00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
-    room.visual.text("Container", xOffset, maxStartPointHeight-0-0.5,
+    room.visual.text("Container", xOffset, maxStartPointHeight-0-1.5,
         options { color = "#FFAA00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+    room.visual.text("Imports", xOffset, maxStartPointHeight+0.5-1.5,
+        options { color = "#00FF00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+    room.visual.text("Exports", xOffset, maxStartPointHeight+1.0-1.5,
+        options { color = "#FF0000"; font = "0.5"; align = TEXT_ALIGN_LEFT })
 
     val drawnPoints = extensionPolyLine.size
     val lastExtensionEnergy = room.memory.energyGraphData[room.memory.energyGraphData.size-2].extensionEnergy
     val lastSourceEnergy = room.memory.energyGraphData[room.memory.energyGraphData.size-2].sourceEnergy
     val lastContainerEnergy = room.memory.energyGraphData[room.memory.energyGraphData.size-2].containerEnergy
+    val lastImports = room.memory.energyGraphData[room.memory.energyGraphData.size-2].imports ?: 0
+    val lastExports = room.memory.energyGraphData[room.memory.energyGraphData.size-2].exports ?: 0
 
     // Add label to last point
     room.visual.text("$lastExtensionEnergy", extensionPolyLine[drawnPoints-1][0]+0.25,
@@ -214,6 +261,12 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
     room.visual.text("$lastContainerEnergy", containerPolyLine[drawnPoints-1][0]+0.25,
         containerPolyLine[drawnPoints-1][1]+0.125,
         options { color = "#FFAA00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+    room.visual.text("$lastImports", importsPolyLine[drawnPoints-1][0]+0.25,
+        importsPolyLine[drawnPoints-1][1]+0.125,
+        options { color = "#00FF00"; font = "0.5"; align = TEXT_ALIGN_LEFT })
+    room.visual.text("$lastExports", exportsPolyLine[drawnPoints-1][0]+0.25,
+        exportsPolyLine[drawnPoints-1][1]+0.125,
+        options { color = "#FF0000"; font = "0.5"; align = TEXT_ALIGN_LEFT })
 
     // Draw some tickmark points (displaying "every")
     for (i in 0 until drawnPoints) {
@@ -225,6 +278,15 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
     val counter = every - Game.time % every
     room.visual.text("$counter", (drawnPoints-1)*separation+xOffset, y+0.5+0.75,
         options { color = "#FFFFFF"; font = "0.5"; align = TEXT_ALIGN_CENTER })
+
+    // Show import/export amount in the past cycle of 300 ticks
+    val importRate = (room.memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+        .sumOf { it.imports }) * 300 / (every*maxPoints)
+    val exportRate = (room.memory.energyGraphData.dropLast(1).takeLast(maxPoints)
+        .sumOf { it.exports }) * 300 / (every*maxPoints)
+
+    room.visual.text("Import rate: $importRate/cycle", x, y-9, options { color = "#00FF00"; font = "0.7"; align = TEXT_ALIGN_CENTER })
+    room.visual.text("Export rate: $exportRate/cycle", x, y-8, options { color = "#FF0000"; font = "0.7"; align = TEXT_ALIGN_CENTER })
 
 }
 

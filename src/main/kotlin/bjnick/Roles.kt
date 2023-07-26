@@ -5,6 +5,7 @@ import assignedSource
 import collecting
 import distributionCategory
 import homeRoom
+import lastRoom
 import lastTripDuration
 import lastTripStarted
 import prospectedCount
@@ -12,6 +13,7 @@ import prospectingRooms
 import prospectingTargets
 import role
 import screeps.api.*
+import settlementRoom
 
 object Role {
     val UNASSIGNED = "UNASSIGNED"
@@ -24,6 +26,7 @@ object Role {
     val PROSPECTOR = "PROSPECTOR"
     val CLAIMER = "CLAIMER"
     val OUTER_HARVESTER = "OUTER_HARVESTER"
+    val FREIGHTER = "CARAVAN"
 }
 
 fun Creep.executeRole() {
@@ -42,6 +45,7 @@ fun Creep.executeRole() {
         Role.PROSPECTOR -> prospector()
         Role.CLAIMER -> claimer()
         Role.OUTER_HARVESTER -> outer_harvester()
+        Role.FREIGHTER -> freighter()
     }
 }
 
@@ -54,7 +58,8 @@ fun Creep.pathColor() = when (memory.role) {
     Role.UPGRADER -> "#FF00FF"
     Role.REPAIRER -> "#00FFFF"
     Role.PROSPECTOR -> "#FFAA00"
-    Role.OUTER_HARVESTER -> "#0000FF"
+    Role.OUTER_HARVESTER -> "#6666FF"
+    Role.FREIGHTER -> "#FFFF00"
     else -> "#FFFFFF"
 }
 
@@ -67,16 +72,21 @@ fun Creep.carrier() {
 
     if (!stackToCarriers())
     if (isCollecting()) {
-        findDroppedEnergy(room)?.let {
-            collectFrom(it); return
+        val dropped = findDroppedEnergy(room)
+        if (dropped != null) {
+            collectFrom(dropped)
+            return
         }
-        var success = if (useDistributionSystem(room)) {
-            collectFromHarvesters(room, pickupLocationBias())
+        val target = if (useDistributionSystem(room)) {
+            findConvenientEnergy(room, pickupLocationBias())
         } else {
-            collectFromHarvesters()
+            findConvenientEnergy()
         }
-        if (!success && store.getUsedCapacity() > 0)
+        if (target != null) {
+            collectFrom(target)
+        } else if (store.getUsedCapacity() > 0) {
             memory.collecting = false // keep distributing even if not full
+        }
     } else {
         if (useDistributionSystem(room)) {
             if (memory.distributionCategory == 0)
@@ -259,11 +269,16 @@ fun Creep.claimer() {
 
 fun Creep.settler() {
     if (stepAwayFromBorder()) return
-    memory.homeRoom = "E59N45"
-    memory.assignedRoom = "E58N45" // TODO FOR THIS RUN ONLY
+    if (!loadAssignedRoomAndHome()) return
 
     if (isCollecting()) {
         if (gotoAssignedRoom()) return
+
+        val dropped = findDroppedEnergy(room)
+        if (dropped != null) {
+            collectFrom(dropped)
+            return
+        }
 
         if (findFullestContainer() != null) {
             if (memory.assignedSource == "")
@@ -285,23 +300,14 @@ fun Creep.settler() {
             val target = findWorkEnergyTarget(room)
             //console.log("$name, target: ${target} pos: ${target?.pos}")
             if (target == room.controller || room.name == memory.homeRoom) {
-                // TODO REVERT TO PROSPECTOR BEHAVIOR
-                if (memory.homeRoom == "")
-                    return
+                // REVERT TO PROSPECTOR BEHAVIOR
                 if (gotoHomeRoom()) return
-
-                val container = findClosestContainer()
-                if (container != null) {
-                    //say(jsTypeOf(container).take(3)+":${container.pos.x},${container.pos.y}")
-                    putEnergy(container)
-                } else {
-                    putEnergy(findEnergyTarget(Game.rooms[memory.homeRoom] ?: return))
-                }
+                putEnergy(findConvenientContainer())
             } else {
                 if (target != null) {
                     //say(jsTypeOf(target).take(3)+":${target.pos.x},${target.pos.y}")
                 }
-                putEnergy(findWorkEnergyTarget(room))
+                putEnergy(target)
             }
         }
     }
@@ -309,11 +315,47 @@ fun Creep.settler() {
 
 fun Creep.outer_harvester() {
     if (stepAwayFromBorder()) return
-    memory.homeRoom = "E59N45"
-    memory.assignedRoom = "E58N45" // TODO FOR THIS RUN ONLY
+    if (!loadAssignedRoomAndHome()) return
+
     // For settling in nearby rooms
     if (isCollecting() && gotoAssignedRoom()) return
 
+    if (store.getUsedCapacity(RESOURCE_ENERGY) > 0 && room.controller!!.ticksToDowngrade < 9500 && pos.getRangeTo(room.controller!!) < 5) {
+        putEnergy(room.controller)
+        return
+    }
+
     // Then do basic harvester stuff
     harvester()
+}
+
+fun Creep.freighter() {
+    if (!loadAssignedRoomAndHome()) return
+    if (atBorder()) {
+        if (memory.lastRoom == memory.assignedRoom && room.name == memory.homeRoom ||
+            room.name == memory.assignedRoom && memory.lastRoom == memory.homeRoom)
+            recordImportExport(memory.lastRoom, room.name, store.getUsedCapacity())
+    }
+    if (nearBorder()) {
+        memory.lastRoom = room.name
+    }
+
+    if (stepAwayFromBorder()) return
+
+    // Collects only in the assigned room
+    // Distributes only in the home room
+    if (isCollecting()) {
+        if (gotoAssignedRoom()) return
+        if (room.getTotalContainerEnergy() < this.store.getCapacity()!!*2) {
+            // Wait for it to fill up, close to the source
+            say("Waiting")
+            moveIfNotInRange(findConvenientEnergy() ?: return, ERR_NOT_IN_RANGE)
+            return
+        }
+        collectFrom(findConvenientEnergy())
+    } else {
+        if (gotoHomeRoom()) return
+        putEnergy(findConvenientContainer())
+    }
+
 }

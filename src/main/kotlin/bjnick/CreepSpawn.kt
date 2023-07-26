@@ -106,6 +106,7 @@ fun spawnCreeps(
 
     fun limit(v: Int) = min(v, 850) // an arbitrary limit to avoid too many parts
     val capacity = limit(spawn.room.energyCapacityAvailable)
+    val UNLIMITED = spawn.room.energyCapacityAvailable
 
     val maxWorkParts = spawn.room.energyCapacityAvailable / 100 - 1
     val harvesterCount = spawn.room.optimalHarvesters(maxWorkParts)
@@ -144,14 +145,21 @@ fun spawnCreeps(
         //creeps.count { it.memory.role == Role.PROSPECTOR } < 1 -> Pair(Role.PROSPECTOR, bestOffRoadWorker(capacity))
 
         ///// FOR THE OTHER ROOM
-        creeps.count { it.memory.role == Role.OUTER_HARVESTER } < 2 && creeps.count { it.memory.role != Role.OUTER_HARVESTER && it.ticksToLive<100 } == 0 -> Pair(Role.OUTER_HARVESTER, bestFastWorker(capacity))
+        creeps.count { it.memory.role == Role.OUTER_HARVESTER } < 2 -> Pair(Role.OUTER_HARVESTER, bestFastWorker(capacity))
+
+        // Reduced since roads were built
+        creeps.count { it.memory.role == Role.SETTLER } < 2 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
+
+
+        creeps.count { it.memory.role == Role.FREIGHTER } < 1 -> Pair(Role.FREIGHTER, bestOnRoad(UNLIMITED))
+
+
+        creeps.count { it.memory.role == Role.OUTER_HARVESTER } < 4 -> Pair(Role.OUTER_HARVESTER, bestFastWorker(capacity))
+
+        creeps.count { it.memory.role == Role.FREIGHTER } < 2 -> Pair(Role.FREIGHTER, bestOnRoad(UNLIMITED))
 
         creeps.count { it.memory.role == Role.SETTLER } < 4 && creeps.count { it.memory.role != Role.SETTLER && it.ticksToLive<100 } == 0 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
 
-
-        creeps.count { it.memory.role == Role.OUTER_HARVESTER } < 4 && creeps.count { it.memory.role != Role.OUTER_HARVESTER && it.ticksToLive<100 } == 0 -> Pair(Role.OUTER_HARVESTER, bestFastWorker(capacity))
-
-        creeps.count { it.memory.role == Role.SETTLER } < 6 && creeps.count { it.memory.role != Role.SETTLER && it.ticksToLive<100 } == 0 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
 
 
 
