@@ -198,6 +198,7 @@ fun Creep.repairer() {
 }
 
 fun Creep.prospector() {
+    if (stepAwayFromBorder()) return
     if (memory.homeRoom == "") {
         memory.homeRoom = room.name
         memory.assignedSource = Memory.prospectingTargets.randomOrNull() ?: ""
@@ -267,7 +268,7 @@ fun Creep.settler() {
         if (findFullestContainer() != null) {
             if (memory.assignedSource == "")
                 unassignSource(name)
-            collectFrom(findFullestContainer())
+            collectFrom(findConvenientEnergy()) // TODO Bias
         } else {
             collectFromASource()
         }

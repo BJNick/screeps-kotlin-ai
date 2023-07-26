@@ -7,6 +7,8 @@ import screeps.api.structures.Structure
 // Define filter lambda type
 typealias Filter<T> = (T) -> Boolean
 
+/// COMMON FILTERS
+
 // SPECIFIC TO ENERGY
 val hasFreeCapacity: Filter<Any> = { owner -> owner.unsafeCast<StoreOwner>()
     .store.getFreeCapacity(RESOURCE_ENERGY) > 0 }
@@ -15,13 +17,14 @@ val hasUsedCapacity: Filter<Any> = { owner -> owner.unsafeCast<StoreOwner>()
     .store.getUsedCapacity(RESOURCE_ENERGY) > 0 }
 
 fun Structure.isType(vararg types: StructureConstant): Boolean = this.structureType in types
-// Filter of the above
 fun isType(vararg types: StructureConstant): Filter<Structure> = { it.structureType in types }
 fun isType(types: Array<StructureConstant>): Filter<Structure> = { it.structureType in types }
 
 val lessThanMaxHits: Filter<Attackable> = { structure: Attackable -> structure.hits < structure.hitsMax }
 fun <T: Attackable> lessHitsThan(hits: Int): Filter<T> = { structure: T -> structure.hits < hits }
 
+fun hasRole(vararg role: Role): Filter<Creep> = { creep -> creep.memory.role in role.map { it.toString() } }
+fun hasRole(vararg role: String): Filter<Creep> = { creep -> creep.memory.role in role }
 
 // Define an "and" operator for filters
 infix fun <T> Filter<T>.and(other: Filter<T>): Filter<T> = { this(it) && other(it) }
@@ -55,14 +58,16 @@ class ReverseComparable<R: Comparable<R>>(val comparable: R): Comparable<Reverse
 fun <T,R: Comparable<R>> Sorter<T,R>.reversed(): Sorter<T, ReverseComparable<R>> = { obj: T -> ReverseComparable(this(obj)) }
 
 // COMMON SORTS
-fun byDistance(to: RoomPosition): Sorter<HasPosition, Int> = { it.pos.getRangeTo(to) }
+fun byDistance(to: RoomPosition, scale: Int = 1): Sorter<HasPosition, Int> = { it.pos.getRangeTo(to)/scale }
 val byHits: Sorter<Structure, Int> = { it.hits }
 
-val byLeastFree: Sorter<StoreOwner, Int> = { it.store.getFreeCapacity(RESOURCE_ENERGY) ?: 0 }
-val byLeastUsed: Sorter<StoreOwner, Int> = { it.store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
+val byLeastFree: Sorter<Any, Int> = { it.unsafeCast<StoreOwner>().store.getFreeCapacity(RESOURCE_ENERGY) ?: 0 }
+val byLeastUsed: Sorter<Any, Int> = { it.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
 
 val byMostFree = byLeastFree.reversed()
 val byMostUsed = byLeastUsed.reversed()
+
+fun byEnoughEnergy(desired: Int): Sorter<Any, Boolean> = { it.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) < desired  } // reversed
 
 
 /**
@@ -92,21 +97,51 @@ fun Room.byOrder(structureConstant: StructureConstant, f: Filter<Structure> = { 
 /**
  * Takes in any number of find constants and returns an object sorted by the specified order
  */
-fun <T, R: Comparable<R>> Room.bySort(findConstants: Array<FindConstant<T>>, f: Filter<T> = { _: T -> true }, sortBy: Sorter<T, R>): dynamic {
+fun <T, R: Comparable<R>> Room.bySort(findConstants: Array<FindConstant<T>>, f: Filter<T> = { _: T -> true }, sort: Sorter<T, R>): dynamic {
     val results = mutableListOf<T>()
     for (findConstant in findConstants) {
         results.addAll(this.find(findConstant, options { filter = f }))
     }
-    return results.minByOrNull(sortBy)
+    return results.minByOrNull(sort)
 }
 
-fun <T, R: Comparable<R>> Room.bySort(findConstant: FindConstant<T>, f: Filter<T> = { _: T -> true }, sortBy: Sorter<T, R>): dynamic {
-    return bySort(arrayOf(findConstant), f, sortBy)
+fun <T, R: Comparable<R>> Room.bySort(findConstant: FindConstant<T>, f: Filter<T> = { _: T -> true }, sort: Sorter<T, R>): dynamic {
+    return bySort(arrayOf(findConstant), f, sort)
+}
+
+fun <R: Comparable<R>> Room.bySort(structureConstants: Array<StructureConstant>, f: Filter<Structure> = { _: Structure -> true }, sort: Sorter<Structure, R>): dynamic {
+    return bySort(FIND_STRUCTURES, f = isType(structureConstants) and f, sort = {s: Structure -> sort(s)})
+}
+
+fun <R: Comparable<R>> Room.bySort(structureConstant: StructureConstant, f: Filter<Structure> = { _: Structure -> true }, sort: Sorter<Structure, R>): dynamic {
+    return bySort(arrayOf(structureConstant), f, sort)
 }
 
 // TODO: Random element ?
 
 
+fun Creep.findConvenientEnergy(room: Room = this.room, bias: RoomPosition = pos): StoreOwner? {
+
+    // If there is a container with enough energy, use it
+    val harvesterContainer = room.bySort(STRUCTURE_CONTAINER,
+        f = hasUsedCapacity,
+        sort = byEnoughEnergy(store.getFreeCapacity()) then byDistance(bias, 5))
+
+    if (harvesterContainer != null) return harvesterContainer.unsafeCast<StoreOwner>()
+
+    // Else if there is a harvester with enough energy, use that one instead
+    val harvesterCreep = room.bySort(FIND_MY_CREEPS,
+        f = hasUsedCapacity and hasRole(Role.HARVESTER, Role.OUTER_HARVESTER),
+        sort = byEnoughEnergy(store.getFreeCapacity()) then byDistance(bias, 5) then byMostUsed )
+
+    return harvesterCreep.unsafeCast<StoreOwner>()
+}
+
+
+
+
+
+// TESTING
 fun test() {
     Game.rooms.values[0].byOrder(FIND_CREEPS)
     Game.rooms.values[0].byOrder(FIND_CREEPS, f = { it.hits < it.hitsMax })
@@ -114,8 +149,8 @@ fun test() {
     Game.rooms.values[0].byOrder(FIND_CREEPS, f = hasFreeCapacity and hasUsedCapacity)
     Game.rooms.values[0].byOrder(FIND_CREEPS, f = hasFreeCapacity or hasUsedCapacity)
 
-    Game.rooms.values[0].bySort(FIND_CREEPS, sortBy = { it.hits })
-    Game.rooms.values[0].bySort(FIND_CREEPS, f = { it.hits < it.hitsMax }, sortBy = { it.hits })
+    Game.rooms.values[0].bySort(FIND_CREEPS, sort = { it.hits })
+    Game.rooms.values[0].bySort(FIND_CREEPS, f = { it.hits < it.hitsMax }, sort = { it.hits })
 
 
     val sortingBy = { it: Creep -> it.name } then { it.hits } then { it.memory.role } then byDistance(Game.rooms.values[0].controller!!.pos)
@@ -123,7 +158,7 @@ fun test() {
 
     Game.rooms.values[0]
         .bySort(FIND_CREEPS, f = { it: Creep -> it.hits < it.hitsMax } and { !it.spawning } and lessThanMaxHits,
-                             sortBy = { it: Creep -> it.name } then { it.hitsMax } )
+                             sort = { it: Creep -> it.name } then { it.hitsMax } )
 
 
     Game.rooms.values[0].byOrder(FIND_STRUCTURES, f = { it.isType(STRUCTURE_CONTAINER) } )

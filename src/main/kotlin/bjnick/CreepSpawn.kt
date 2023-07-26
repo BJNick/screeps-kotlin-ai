@@ -141,7 +141,7 @@ fun spawnCreeps(
         //creeps.count { it.memory.role == Role.CLAIMER } < 1 -> Pair(Role.CLAIMER, arrayOf(MOVE, MOVE, MOVE, MOVE, CLAIM))
 
         // FOR THE EXTRA EXPANSION
-        creeps.count { it.memory.role == Role.PROSPECTOR } < 1 -> Pair(Role.PROSPECTOR, bestOffRoadWorker(capacity))
+        //creeps.count { it.memory.role == Role.PROSPECTOR } < 1 -> Pair(Role.PROSPECTOR, bestOffRoadWorker(capacity))
 
         ///// FOR THE OTHER ROOM
         creeps.count { it.memory.role == Role.OUTER_HARVESTER } < 2 && creeps.count { it.memory.role != Role.OUTER_HARVESTER && it.ticksToLive<100 } == 0 -> Pair(Role.OUTER_HARVESTER, bestFastWorker(capacity))
