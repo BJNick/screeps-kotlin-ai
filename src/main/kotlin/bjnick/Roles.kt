@@ -1,5 +1,6 @@
 package bjnick
 
+import AbstractPos
 import assignedRoom
 import assignedSource
 import collecting
@@ -8,13 +9,17 @@ import distributionCategory
 import homeRoom
 import lastTripDuration
 import lastTripStarted
+import preferredPathCache
 import prospectedCount
 import prospectingRooms
 import prospectingTargets
 import role
 import screeps.api.*
-import screeps.api.structures.StructureRampart
-import screeps.api.structures.StructureWall
+import screeps.api.structures.*
+import screeps.utils.memory.memory
+import targetID
+import targetPos
+import targetTask
 
 object Role {
     val UNASSIGNED = "UNASSIGNED"
@@ -29,6 +34,7 @@ object Role {
     val OUTER_HARVESTER = "OUTER_HARVESTER"
     val CARAVAN = "CARAVAN"
     val RANGER = "RANGER"
+    val ERRANDER = "ERRANDER"
 }
 
 fun Creep.executeRole() {
@@ -49,6 +55,7 @@ fun Creep.executeRole() {
         Role.OUTER_HARVESTER -> outer_harvester()
         Role.CARAVAN -> caravan()
         Role.RANGER -> ranger()
+        Role.ERRANDER -> errander()
     }
 }
 
@@ -64,6 +71,7 @@ fun Creep.pathColor() = when (memory.role) {
     Role.OUTER_HARVESTER -> "#6666FF"
     Role.CARAVAN -> "#FFFF00"
     Role.RANGER -> "#FF00FF"
+    Role.ERRANDER -> "#AAFF00"
     else -> "#FFFFFF"
 }
 
@@ -74,18 +82,31 @@ fun Creep.carrier() {
         room.visual.text("${intToCat(memory.distributionCategory)}"
             .take(1), pos.x+0.0, pos.y+1.0, options { color = "#66FF66"; font = "0.5"; opacity = 0.5 })
 
-    if (!stackToCarriers())
+    if (executeCachedTask()) return // TODO TESTING
+
+    if (stackToCarriers()) return
+
     if (isCollecting()) {
         val dropped = findDroppedEnergy(room)
         if (dropped != null) {
             collectFrom(dropped)
             return
         }
-        val target = if (useDistributionSystem(room)) {
+        /*val target = if (useDistributionSystem(room)) {
             findConvenientEnergy(room, pickupLocationBias())
-        } else {
-            findConvenientEnergy()
+        } else {*/
+        // ALWAYS PICK THE CLOSEST
+        // TODO Encapsulate distribution behaviour
+        if (memory.distributionCategory == catToInt(DistributionCategory.STORAGE)) {
+            val target = room.byOrder(STRUCTURE_STORAGE, f = hasAtLeastEnergy(1950) )
+            if (target != null) {
+                collectFrom(target)
+                return
+            }
         }
+
+        val target = findConvenientEnergy()
+        //}
         if (target != null) {
             collectFrom(target)
         } else if (store.getUsedCapacity() > 0) {
@@ -108,8 +129,8 @@ fun Creep.harvester() {
     if (isCollecting()) {
         if (store.getFreeCapacity() > 0)
             collectFromASource()
-        if (container != null && container.hits >= 35000) {
-            this.transfer(container, RESOURCE_ENERGY)
+        if (container != null && container.hits >= 35000 && store.getUsedCapacity() > 40) {
+            this.fastTransfer(container, RESOURCE_ENERGY)
         }
     } else {
         if (container != null) {
@@ -126,6 +147,8 @@ fun Creep.harvester() {
 }
 
 fun Creep.builder() {
+    if (executeCachedTask()) return // TODO TESTING
+
     if (room.energyAvailable < room.energyCapacityAvailable &&
         room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_CONTAINER } } )
             .sumOf { it.unsafeCast<StoreOwner>().store[RESOURCE_ENERGY] ?: 0 } < 500) {
@@ -137,7 +160,7 @@ fun Creep.builder() {
 
     if (isCollecting()) {
         //if (!ProgressState.carriersPresent)
-        collectFromClosest() // TODO
+        collectFrom(findConvenientEnergy())
     } else {
         val site = getConstructionSite(room)
 
@@ -162,7 +185,7 @@ fun Creep.builder() {
 fun Creep.upgrader() {
     if (isCollecting()) {
         if (!useDistributionSystem(room))
-            collectFromClosest()
+            collectFrom(findConvenientEnergy())
         else {
             if (store.getUsedCapacity() > 0)
                 memory.collecting = false // keep upgrading even if not full
@@ -175,9 +198,10 @@ fun Creep.upgrader() {
 fun Creep.repairer() {
     if (isCollecting()) {
         //if (!ProgressState.carriersPresent
-        collectFromClosest()
+        collectFrom(findConvenientEnergy())
     } else {
-        if (getTarget() != null) {
+        // OBSOLETE target locking
+        /*if (getTarget() != null) {
             if (needsRepair(getTarget())) {
                 val success =goRepair(Game.getObjectById(getTarget()?.id))
                 if (success) clearTarget()
@@ -185,12 +209,12 @@ fun Creep.repairer() {
             } else {
                 clearTarget()
             }
-        }
+        }*/
 
         // Repair critical entities
         val toRepairCritical = findCriticalRepairTarget()
         if (toRepairCritical != null) {
-            lockTarget(toRepairCritical)
+            //lockTarget(toRepairCritical)
             goRepair(toRepairCritical)
             return
         }
@@ -209,7 +233,7 @@ fun Creep.repairer() {
             findRepairTarget(10000) ?:
             findRepairTarget(20000)
         if (toRepair != null) {
-            lockTarget(toRepair)
+            //lockTarget(toRepair)
             goRepair(toRepair)
             return
         }
@@ -280,10 +304,19 @@ fun Creep.claimer() {
 }
 
 fun Creep.settler() {
+    memory.preferredPathCache = 10
+
+    // TODO REMOVE
+    memory.targetPos = AbstractPos(0,0,"")
+    memory.targetID = ""
+    memory.targetTask = ""
+
     if (!loadAssignedRoomAndHome()) return
     recordBorderMovements()
 
     if (stepAwayFromBorder()) return
+
+    if (executeCachedTask()) return // TODO TESTING
 
     if (isCollecting()) {
         if (gotoAssignedRoom()) return
@@ -318,18 +351,23 @@ fun Creep.settler() {
                 return
             }
 
-            val milRepair = findMilitaryRepairTarget(bias = cornerBias())
-            if (milRepair != null) {
-                goRepair(milRepair)
+
+            var toRepair: Structure? = findInfrastructureRepairTarget(4000, bias = pos) ?:
+                findMilitaryRepairTarget(bias = cornerBias())
+
+            if (toRepair != null) {
+                room.visual.circle(toRepair.pos, options { stroke = "#00FFAA"; opacity=0.5; radius = 0.3 })
+                goRepair(toRepair)
                 return
             }
 
             val target = findWorkEnergyTarget(room)
             if (target != null && target != room.controller) {
                 putEnergy(target)
+                return
             }
 
-            val toRepair = findRepairTarget(5000) ?: findRepairTarget(10000)
+            toRepair = findRepairTarget(5000) ?: findRepairTarget(10000)
             if (toRepair != null) {
                 goRepair(toRepair)
                 return
@@ -360,7 +398,7 @@ fun Creep.outer_harvester() {
     if (isCollecting() && gotoAssignedRoom()) return
 
     if (Game.time % 4 == name.hashCode() % 4)
-        say(arrayOf("Want peace", "No attac", "We mine").random()) // TODO: Tell other players
+        say(arrayOf("Want peace", "No attac", "We mine").random(), true) // TODO: Tell other players
 
     if (store.getUsedCapacity(RESOURCE_ENERGY) > 0 && room.controller!!.ticksToDowngrade < 9500 && pos.getRangeTo(room.controller!!) < 5) {
         putEnergy(room.controller)
@@ -368,11 +406,18 @@ fun Creep.outer_harvester() {
     }
 
     val source = assignedSource()
+    val sourceVal = source?.energy ?: -1
     val container = findBufferContainer()
-    if ((source?.energy == 0 || container?.store?.getFreeCapacity(RESOURCE_ENERGY) == 0) && pos.getRangeTo(room.controller!!) < 5) {
+    val containerVal = container?.store?.getUsedCapacity(RESOURCE_ENERGY) ?: 0
+    if ((sourceVal == 0 || containerVal == 2000) && pos.getRangeTo(room.controller!!) < 5) {
         if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
-            collectFrom(container)
-            return
+            if (sourceVal == 0) {
+                collectFrom(container)
+                return
+            } else {
+                collectFrom(source)
+                return
+            }
         }
         putEnergy(room.controller)
         return
@@ -388,10 +433,19 @@ fun Creep.caravan() {
 
     if (stepAwayFromBorder()) return
 
+    if (executeCachedTask()) return // TODO TESTING
+
     // Collects only in the assigned room
     // Distributes only in the home room
     if (isCollecting()) {
         if (gotoAssignedRoom()) return
+
+        val dropped = findDroppedEnergy(room)
+        if (dropped != null && dropped.pos.getRangeTo(this) < 5) {
+            collectFrom(dropped)
+            return
+        }
+
         if (room.getTotalContainerEnergy() < this.store.getCapacity()!!*2) {
             // Wait for it to fill up, close to the source
             say("Waiting")
@@ -491,5 +545,89 @@ fun Creep.ranger() {
     }
 
 
+}
+
+
+fun Creep.errander() {
+    room.visual.text("E", pos.x+0.0, pos.y+1.0, options { color = "#FFFFFF"; font = "0.5"; opacity = 0.5 })
+
+    if (isCollecting()) {
+        val dropped = findDroppedEnergy(room)
+        if (dropped != null) {
+            collectFrom(dropped)
+            return
+        }
+
+        val target = findConvenientEnergy(takeFromCarriers = 2)
+
+        if (target != null) {
+            collectFrom(target)
+        } else if (store.getUsedCapacity() > 0) {
+            memory.collecting = false // keep distributing even if not full
+        }
+    } else {
+
+        val otherErranders = room.find(FIND_MY_CREEPS, options { filter = {it.name != name && it.memory.role == Role.ERRANDER }})
+
+        val towers = room.find(FIND_MY_STRUCTURES, options { filter = { it.structureType == STRUCTURE_TOWER }})
+            .unsafeCast<Array<StructureTower>>()
+
+        // REFILL TOWERS
+        for (it in towers) {
+            // Check tower supplier
+            val other = otherErranders.bySort(sort = byDistance(it.pos))?.unsafeCast<Creep>()
+            if (other == null || other.pos.getRangeTo(it.pos) > 6) {
+                // No other erranders are close to this tower
+                if (it.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+                    putEnergy(it)
+                    return
+                } else {
+                    moveWithin(it.pos, 1)
+                    return
+                }
+            }
+        }
+
+        // REFILL SPAWN
+        val spawn = room.find(FIND_MY_SPAWNS).firstOrNull()
+
+        if (spawn != null) {
+            val other = otherErranders.bySort(sort = byDistance(spawn.pos))?.unsafeCast<Creep>()
+            if (other == null || other.pos.getRangeTo(spawn.pos) > 7) {
+                // No other erranders are close to the spawn
+                val target = getVacantSpawnOrExt(room)
+                if (target != null) {
+                    putEnergy(target)
+                    return
+                } else {
+                    moveWithin(spawn.pos, 3)
+                    return
+                }
+            }
+        }
+
+        // REFILL UPGRADER CREEPS
+        val upgrader = room.bySort(FIND_MY_CREEPS, f = hasRole(Role.UPGRADER), sort = byMostFree then byDistance(this.pos))
+
+        if (upgrader != null) {
+            val it = upgrader.unsafeCast<Creep>()
+            val other = otherErranders.bySort(sort = byDistance(it.pos))?.unsafeCast<Creep>()
+            if (other == null || other.pos.getRangeTo(it.pos) > 3) {
+                // No other erranders are close to this upgrader
+                if (it.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+                    putEnergy(it)
+                    return
+                } else {
+                    moveWithin(it.pos, 1)
+                    return
+                }
+            }
+        }
+
+
+        val target = findEnergyTarget(room)
+        putEnergy(target)
+
+    }
 }
 

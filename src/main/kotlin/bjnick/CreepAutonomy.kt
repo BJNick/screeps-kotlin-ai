@@ -1,18 +1,27 @@
 package bjnick
 
+import AbstractPos
+import FLAG_COLLECTING
+import FLAG_DISTRIBUTING
+import FLAG_IGNORE
+import absToPos
 import assignedRoom
 import assignedSource
 import collecting
+import collectingFlag
 import collectingPriority
 import distributesEnergy
 import homeRoom
 import lastRoom
+import preferredPathCache
 import role
 import screeps.api.*
 import screeps.api.structures.*
 import screeps.utils.unsafe.jsObject
 import settlementRoom
 import targetID
+import targetPos
+import targetTask
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
@@ -28,14 +37,15 @@ import kotlin.random.Random
 fun logError(message: Any?) : Unit = console.log(message)
 
 fun Creep.isCollecting(): Boolean {
-    if (!memory.collecting && store[RESOURCE_ENERGY] == 0) {
+    if (memory.collectingFlag == FLAG_COLLECTING || !memory.collecting && store[RESOURCE_ENERGY] == 0) {
         memory.collecting = true
         say("⛏ collect")
     }
-    if (memory.collecting && store[RESOURCE_ENERGY] == store.getCapacity()) {
+    if (memory.collectingFlag == FLAG_DISTRIBUTING || memory.collecting && store[RESOURCE_ENERGY] == store.getCapacity()) {
         memory.collecting = false
         say("⚡ put away")
     }
+    memory.collectingFlag = FLAG_IGNORE
     return memory.collecting
 }
 
@@ -77,7 +87,7 @@ fun Creep.myRepairPriority(): RoomPosition {
 }
 
 fun Creep.cornerBias(): RoomPosition {
-    return when (name.hashCode() % 4) {
+    return when (id.hashCode() % 4) {
         0 -> RoomPosition(0, 0, room.name)
         1 -> RoomPosition(49, 0, room.name)
         2 -> RoomPosition(0, 49, room.name)
@@ -117,7 +127,7 @@ fun Creep.collectFromHarvesters(fromRoom: Room = this.room, bias: RoomPosition =
     }
 
     if (harvesterCreep != null) {
-        moveIfNotInRange(harvesterCreep, harvesterCreep.transfer(this, RESOURCE_ENERGY), "collectEnergy")
+        moveIfNotInRange(harvesterCreep, harvesterCreep.fastTransfer(this, RESOURCE_ENERGY), "collectEnergy")
         return true
     }
     return false
@@ -148,7 +158,7 @@ fun Creep.collectFromClosest(fromRoom: Room = this.room) {
     }
 
     if (harvesterCreep != null)
-        moveIfNotInRange(harvesterCreep, harvesterCreep.transfer(this, RESOURCE_ENERGY), "collectEnergy")
+        moveIfNotInRange(harvesterCreep, harvesterCreep.fastTransfer(this, RESOURCE_ENERGY), "collectEnergy")
 }
 
 
@@ -160,7 +170,7 @@ fun Creep.collectFrom(target: HasPosition?) {
 
         is Source -> harvest(target)
         is Tombstone -> withdraw(target, RESOURCE_ENERGY)
-        is Creep -> target.transfer(this, RESOURCE_ENERGY)
+        is Creep -> target.fastTransfer(this, RESOURCE_ENERGY, reverse = true)
         is Resource -> pickup(target)
 
         else -> if (target as? StoreOwner != null)  withdraw(target, RESOURCE_ENERGY) else
@@ -192,14 +202,14 @@ fun Creep.putEnergy(target: HasPosition?) {
             e
         }
         is ConstructionSite -> build(target)
-        is Creep -> transfer(target, RESOURCE_ENERGY)
+        is Creep -> fastTransfer(target, RESOURCE_ENERGY)
 
         // OTHER STRUCTURES SHOULD USE TRANSFER
         is StructureRoad -> repair(target)
         is StructureWall -> repair(target)
         is StructureRampart -> repair(target)
 
-        else -> if (target as? StoreOwner != null)  transfer(target, RESOURCE_ENERGY) else
+        else -> if (target as? StoreOwner != null)  fastTransfer(target, RESOURCE_ENERGY) else
             return logError("putEnergy: target $target is of unsupported structure type")
     }
 
@@ -221,8 +231,18 @@ fun Creep.stackToCarriers(): Boolean {
                 && it.store[RESOURCE_ENERGY] > store[RESOURCE_ENERGY] }})
         .sortedBy { it.store[RESOURCE_ENERGY] }
 
+    val nearbyErranders = room.find(FIND_MY_CREEPS, options { filter = {
+                it.memory.role == Role.ERRANDER && it.pos.isNearTo(pos)
+                && it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }})
+
     nearbyCarriers.lastOrNull()?.let {
-        moveIfNotInRange(it, transfer(it, RESOURCE_ENERGY), "collectEnergy")
+        moveIfNotInRange(it, fastTransfer(it, RESOURCE_ENERGY), "collectEnergy")
+        say("stack!")
+        return true
+    }
+
+    nearbyErranders.lastOrNull()?.let {
+        moveIfNotInRange(it, fastTransfer(it, RESOURCE_ENERGY), "collectEnergy")
         say("stack!")
         return true
     }
@@ -245,9 +265,15 @@ fun Creep.moveIfNotInRange(target: HasPosition, err: ScreepsReturnCode, function
 
 fun Creep.moveWithin(target: RoomPosition, dist: Int = 0): ScreepsReturnCode {
     if (pos.getRangeTo(target) > dist) {
+        lockTarget(target, "moveWithin") // TODO Adjust parameter
+
         return moveTo(target, options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle>
                 { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_DASHED };
-            costCallback = ::costCallbackAvoidBorder; ignoreCreeps = nearBorder() || !hasCreepsNearby(1)  })
+            costCallback = ::costCallbackAvoidBorder;
+            reusePath = if (memory.preferredPathCache == 0) 5 else memory.preferredPathCache;
+            ignoreCreeps = nearBorder() || !hasCreepsNearby(1)  })
+    } else {
+        clearTarget()
     }
     return OK
 }
@@ -408,9 +434,10 @@ fun Creep.findDroppedEnergy(room: Room): HasPosition? {
 fun Creep.findBufferContainer(): StructureContainer? {
     return room.find(
         FIND_STRUCTURES,
-        options { filter = { it.structureType == STRUCTURE_CONTAINER && it.pos.getRangeTo(pos) < 2 } })
+        options { filter = { it.structureType == STRUCTURE_CONTAINER && it.pos.getRangeTo(pos) < 4 } })
         .map { it.unsafeCast<StructureContainer>() }
-        .firstOrNull { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
+        .firstOrNull() // TODO Double check if this breaks
+        //.firstOrNull { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
 }
 
 fun Creep.findClosestContainer(): StructureContainer? {
@@ -432,8 +459,20 @@ fun Creep.findFullestContainer(): StructureContainer? {
         .maxByOrNull { it.store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
 }
 
-fun Creep.lockTarget(target: Identifiable?) {
+fun Creep.lockTarget(target: Identifiable?, targetTask: String? = null) {
     memory.targetID = target?.id ?: ""
+    if (target != null) {
+        val pos = Game.getObjectById<Identifiable>(target.id)?.unsafeCast<HasPosition>()?.pos
+        if (pos != null)
+            memory.targetPos = AbstractPos(pos)
+    }
+    memory.targetTask = targetTask ?: ""
+}
+
+fun Creep.lockTarget(target: RoomPosition?, targetTask: String? = null) {
+    if (target != null)
+        memory.targetPos = AbstractPos(target)
+    memory.targetTask = targetTask ?: ""
 }
 
 fun Creep.getTarget(): Identifiable? {
@@ -441,9 +480,36 @@ fun Creep.getTarget(): Identifiable? {
     return Game.getObjectById(memory.targetID)
 }
 
+fun Creep.getTargetTask(): String? {
+    if (memory.targetTask == "") return null
+    return memory.targetTask
+}
+
 fun Creep.clearTarget() {
     memory.targetID = ""
+    memory.targetTask = ""
 }
+
+fun Creep.executeCachedTask(): Boolean {
+    return when (memory.targetTask) {
+        "moveWithin" -> {
+            val targetPos = absToPos(memory.targetPos)
+            if (targetPos.inRangeTo(pos, 2)) {
+                clearTarget()
+                return false
+            }
+            //say("cache")
+            val code = moveWithin(targetPos, 2)
+            if (code != OK) {
+                clearTarget()
+                return false
+            }
+            true
+        }
+        else -> false
+    }
+}
+
 
 fun needsRepair(target: Identifiable?): Boolean {
     if (target == null) return false
@@ -515,3 +581,52 @@ fun Creep.recordBorderMovements() {
 fun bindCoordinate(v: Int): Int {
     return max(0, min(49, v))
 }
+
+fun Creep.fastTransfer(target: StoreOwner, resource: ResourceConstant, reverse: Boolean = false): ScreepsReturnCode {
+    return transfer(target, resource)
+    // Try to transfer all energy to target
+    /*val usedCapacity = store.getUsedCapacity(resource)
+    val targetFreeCapacity = target.store.getFreeCapacity(resource)
+    val code = transfer(target, resource)
+    if (code == OK && usedCapacity <= targetFreeCapacity) {
+        // We just emptied our store
+        memory.collectingFlag = FLAG_COLLECTING
+        say("\uD83D\uDD04 collect")
+        // Rerun the creep to find a new target
+        //if (!reverse) this.executeRole()
+    }
+    if (code == OK && usedCapacity >= targetFreeCapacity) {
+        // We just filled up target
+        if (target is Creep) {
+            target.memory.collectingFlag = FLAG_DISTRIBUTING
+            say("\uD83D\uDD04 distribute")
+            // DO NOT EXECUTE, WE DON'T KNOW IF IT ALREADY DID AN ACTION
+            //if (reverse) target.executeRole()
+        }
+    }
+    return code*/
+}
+
+
+fun Creep.fastWithdraw(target: StoreOwner, resource: ResourceConstant): ScreepsReturnCode {
+    // Try to withdraw all energy from target
+    val freeCapacity = store.getFreeCapacity(resource)
+    val targetUsedCapacity = target.store.getUsedCapacity(resource)
+    val code = withdraw(target, resource)
+    if (code == OK && freeCapacity <= targetUsedCapacity) {
+        // We just filled up our store
+        memory.collectingFlag = FLAG_DISTRIBUTING
+        // Rerun the creep to find a new target
+        //this.executeRole()
+    }
+    if (code == OK && freeCapacity >= targetUsedCapacity) {
+        // We just emptied target
+        if (target is Creep) {
+            target.memory.collectingFlag = FLAG_COLLECTING
+            // DO NOT EXECUTE, WE DON'T KNOW IF IT ALREADY DID AN ACTION
+        }
+    }
+    return code
+}
+
+

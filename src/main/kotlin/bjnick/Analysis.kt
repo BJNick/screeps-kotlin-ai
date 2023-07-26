@@ -172,7 +172,7 @@ fun recordImportExport(from: String, to: String, amount: Int)  {
     }
 }
 
-fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
+fun recordGraph(room: Room, every: Int, x: Double, y: Double, showVis: Boolean = true) {
     // Then graph the last 5 points (if there are 5 points)
     val maxPoints = 30
 
@@ -198,7 +198,7 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double) {
                 )
         }
     }
-    if (room.memory.energyGraphData.isEmpty()) {
+    if (room.memory.energyGraphData.isEmpty() || !showVis) {
         return
     }
 

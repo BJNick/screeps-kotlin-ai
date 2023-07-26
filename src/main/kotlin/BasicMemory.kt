@@ -14,7 +14,14 @@ var CreepMemory.distributesEnergy: Boolean by memory { false }
 
 var CreepMemory.distributionCategory: Int by memory { 0 }
 
+class AbstractPos(val x: Int, val y: Int, val roomName: String) {
+    constructor(pos: RoomPosition) : this(pos.x, pos.y, pos.roomName)
+}
+
+fun absToPos(absPos: AbstractPos) = RoomPosition(absPos.x, absPos.y, absPos.roomName)
+
 var CreepMemory.targetID : String by memory { "" }
+var CreepMemory.targetPos : AbstractPos by memory { AbstractPos(0, 0, "") }
 var CreepMemory.targetTask : String by memory { "" }
 
 var CreepMemory.assignedSource : String by memory { "" }
@@ -27,6 +34,14 @@ var CreepMemory.lastTripStarted : Int by memory { 0 }
 var CreepMemory.lastTripDuration : Int by memory { 0 }
 
 var CreepMemory.lastRoom: String by memory { "" }
+
+var CreepMemory.preferredPathCache: Int by memory { 0 }
+
+val FLAG_IGNORE = 0
+val FLAG_COLLECTING = 1
+val FLAG_DISTRIBUTING = 2
+
+var CreepMemory.collectingFlag: Int by memory { FLAG_IGNORE }
 
 /* Rest of the persistent memory structures.
 * These set an unused test variable to 0. This is done to illustrate the how to add variables to
@@ -74,6 +89,12 @@ var Memory.ignorePlayers: Array<String> by memory { arrayOf() }
 
 var Memory.visualizeRepairs: Boolean by memory { false }
 var Memory.visualizeDyingCreeps: Boolean by memory { true }
+
+var Memory.outputCPUUsage: Boolean by memory { false }
+var Memory.visualizeCPUUsage: Boolean by memory { false }
+
+var Memory.enableVisualizations: Boolean by memory { false }
+var Memory.visualizeGraphs: Boolean by memory { false }
 
 class DataPoint(val sourceEnergy: Int = 0, val extensionEnergy: Int = 0, val containerEnergy: Int = 0, val time: Int = 0, val imports: Int = 0, val exports: Int = 0)
 

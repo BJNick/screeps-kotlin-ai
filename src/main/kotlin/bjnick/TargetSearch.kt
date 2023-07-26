@@ -33,6 +33,12 @@ fun onOppositeSideOf(pivot: RoomPosition, side: RoomPosition): Filter<HasPositio
             (if (pivot.y < side.y) pivot.y > o.pos.y else pivot.y < o.pos.y && pivot.y != side.y)
 }
 
+fun hasAtLeastEnergy(amount: Int): Filter<Any> =
+    { creep -> creep.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) >= amount }
+
+fun withinRange(range: Int, pos: RoomPosition): Filter<HasPosition> = { o -> o.pos.inRangeTo(pos, range) }
+
+
 // Define an "and" operator for filters
 infix fun <T> Filter<T>.and(other: Filter<T>): Filter<T> = { this(it) && other(it) }
 
@@ -68,6 +74,9 @@ fun <T,R: Comparable<R>> Sorter<T,R>.reversed(): Sorter<T, ReverseComparable<R>>
 fun byDistance(to: RoomPosition, scale: Int = 1): Sorter<HasPosition, Int> = { it.pos.getRangeTo(to)/scale }
 
 val byHits: Sorter<Attackable, Int> = { it.hits }
+val byHitsRatio: Sorter<Attackable, Double> = { it.hits.toDouble()/it.hitsMax.toDouble() }
+val byLeastMaxHits: Sorter<Attackable, Int> = { it.hitsMax }
+val byMaxHits: Sorter<Attackable, dynamic> = byLeastMaxHits.reversed()
 
 val byLeastFree: Sorter<Any, Int> = { it.unsafeCast<StoreOwner>().store.getFreeCapacity(RESOURCE_ENERGY) ?: 0 }
 val byLeastUsed: Sorter<Any, Int> = { it.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
@@ -115,6 +124,12 @@ fun Room.byOrder(structureConstant: StructureConstant, f: Filter<Structure> = { 
     return byOrder(arrayOf(structureConstant), f)
 }
 
+
+fun <T> Array<T>.byOrder(f: Filter<T> = { _: T -> true } ): dynamic {
+    return this.firstOrNull(f)
+}
+
+
 /**
  * Takes in any number of find constants and returns an object sorted by the specified order
  */
@@ -138,23 +153,47 @@ fun <R: Comparable<R>> Room.bySort(structureConstant: StructureConstant, f: Filt
     return bySort(arrayOf(structureConstant), f, sort)
 }
 
+fun <T, R: Comparable<R>> Array<T>.bySort(f: Filter<T> = { _: T -> true }, sort: Sorter<T, R>): dynamic {
+    return this.filter(f).minByOrNull(sort)
+}
+
+
 // TODO: Random element ?
 
 
-fun Creep.findConvenientEnergy(room: Room = this.room, bias: RoomPosition = pos): StoreOwner? {
+fun Creep.findConvenientEnergy(room: Room = this.room, bias: RoomPosition = pos, avoidStorage: Boolean = false,
+                               takeFromCarriers: Int = -1): StoreOwner? {
 
-    val preference: Array<StructureConstant> = arrayOf(STRUCTURE_CONTAINER, STRUCTURE_STORAGE)
+    if (takeFromCarriers > 0) {
+        // Else if there is a carrier with enough energy NEARBY, use that one instead
+        val carrierCreep = room.bySort(
+            FIND_MY_CREEPS,
+            f = hasUsedCapacity and hasRole(Role.CARRIER) and withinRange(takeFromCarriers, pos),
+            sort = byEnoughEnergy(store.getFreeCapacity() / 2) then byDistance(bias) then byMostUsed
+        )
+        if (carrierCreep != null) return carrierCreep.unsafeCast<StoreOwner>()
+    }
+
+    val preference: Array<StructureConstant> = if (avoidStorage) arrayOf(STRUCTURE_CONTAINER)
+    else arrayOf(STRUCTURE_CONTAINER, STRUCTURE_STORAGE)
     // If there is a container with enough energy, use it
-    val harvesterContainer = room.bySort(preference,
+    val harvesterContainer = room.bySort(
+        preference,
         f = hasUsedCapacity,
-        sort = byOrderIn(preference) then byEnoughEnergy(store.getFreeCapacity()/50) then byDistance(bias, 5) then byMostUsed )
+        sort = byEnoughEnergy(store.getFreeCapacity() / 2) then byDistance(
+            bias,
+            3
+        ) then byOrderIn(preference) then byMostUsed
+    )
 
     if (harvesterContainer != null) return harvesterContainer.unsafeCast<StoreOwner>()
 
     // Else if there is a harvester with enough energy, use that one instead
-    val harvesterCreep = room.bySort(FIND_MY_CREEPS,
+    val harvesterCreep = room.bySort(
+        FIND_MY_CREEPS,
         f = hasUsedCapacity and hasRole(Role.HARVESTER, Role.OUTER_HARVESTER),
-        sort = byEnoughEnergy(store.getFreeCapacity()/50) then byDistance(bias, 5) then byMostUsed )
+        sort = byEnoughEnergy(store.getFreeCapacity() / 2) then byDistance(bias, 5) then byMostUsed
+    )
 
     return harvesterCreep.unsafeCast<StoreOwner>()
 }
@@ -165,7 +204,8 @@ fun Creep.findCaravanPickupEnergy(room: Room = this.room, bias: RoomPosition = p
     // If there is a container with enough energy, use it
     val harvesterContainer = room.bySort(STRUCTURE_CONTAINER,
         f = hasUsedCapacity,
-        sort = byEnoughEnergy(store.getFreeCapacity()) then byMostUsed then byDistance(bias, 5))
+        sort = byEnoughEnergy(store.getFreeCapacity()) then byDistance(room.controller!!.pos).reversed() then
+                byMostUsed then byDistance(bias, 5))
 
     return harvesterContainer.unsafeCast<StoreOwner>()
 
@@ -189,7 +229,15 @@ fun Creep.findMilitaryRepairTarget(maxHits: Int = 10000, bias: RoomPosition = po
     val preferredStructures: Array<StructureConstant> = arrayOf(STRUCTURE_RAMPART, STRUCTURE_TOWER, STRUCTURE_WALL)
     return room.bySort(preferredStructures,
         f = lessThanMaxHits and lessHitsThan(maxHits),
-        sort = byOrderIn(preferredStructures) then byBorderProximity then byHits then byDistance(bias, 10))
+        sort = byOrderIn(preferredStructures) then byBorderProximity then byHits then byDistance(bias, 5))
+        ?.unsafeCast<Structure>()
+}
+
+fun Creep.findInfrastructureRepairTarget(maxHits: Int = 10000, bias: RoomPosition = pos): Structure? {
+    val preferredStructures: Array<StructureConstant> = arrayOf(STRUCTURE_ROAD)
+    return room.bySort(preferredStructures,
+        f = lessThanMaxHits and lessHitsThan(maxHits),
+        sort = byOrderIn(preferredStructures) then byMaxHits then { it.hits/1000 } then byDistance(bias))
         ?.unsafeCast<Structure>()
 }
 

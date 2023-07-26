@@ -15,18 +15,39 @@ enum class DistributionCategory {
     SPAWN,      // 1
     CONTROLLER, // 2
     BUILDERS,   // 3
-    TOWERS      // 4
+    TOWERS,     // 4
+    STORAGE,    // 5
 }
+
+// Desired counts
+fun desiredCountOf(category: DistributionCategory): Int = when (category) {
+    SPAWN -> 1
+    CONTROLLER -> 2
+    BUILDERS -> 1
+    TOWERS -> 1
+    STORAGE -> 0 // UNUSED FOR NOW
+    else -> 0
+}
+
+// Actual counts
+fun actualCountOf(category: DistributionCategory, room: Room): Int {
+    return room.find(FIND_MY_CREEPS, options { filter = { it.memory.role == Role.CARRIER &&
+            it.memory.distributionCategory == catToInt(category) } }).size
+}
+
+
 
 fun catToInt(category: DistributionCategory): Int = category.ordinal
 fun intToCat(i: Int): DistributionCategory = DistributionCategory.values()[i]
 fun catCount(): Int = DistributionCategory.values().size
 
+
+
 fun pickDistributionCategory(creep: Creep, room: Room) {
     initializeRoomDistribution(room)
     unassignDistribution(creep.name, room)
     for (i in 1..catCount()) {
-        if (room.memory.distributionAssignments[i] == "") {
+        if (desiredCountOf(intToCat(i)) > actualCountOf(intToCat(i), room)) {
             assignDistribution(creep, room, intToCat(i))
             return
         }
@@ -44,7 +65,7 @@ fun initializeRoomDistribution(room: Room) {
 fun assignDistribution(creep: Creep, room: Room, category: DistributionCategory) {
     creep.memory.distributionCategory = catToInt(category)
     initializeRoomDistribution(room)
-    room.memory.distributionAssignments[catToInt(category)] = creep.name
+    room.memory.distributionAssignments[catToInt(category)] = creep.name // THIS MEMORY IS IGNORED
 }
 
 fun unassignDistribution(creepName: String, room: Room) {
@@ -62,8 +83,8 @@ fun useDistributionSystem(room: Room): Boolean {
 
 fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
     var category = this.memory.distributionCategory
-    if (category == 0) pickDistributionCategory(this, room)
-    category = this.memory.distributionCategory
+    //if (category == 0) pickDistributionCategory(this, room)
+    //category = this.memory.distributionCategory
     if (category == 0) category = name.hashCode() % (catCount()-1) + 1
     val duty = when (intToCat(category)) {
 
@@ -71,9 +92,8 @@ fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
             getVacantSpawnOrExt(room)
 
         CONTROLLER -> // Supply upgrader creeps
-            room.find(FIND_MY_CREEPS, options { filter = { it.memory.role == Role.UPGRADER &&
-                    it.store.getFreeCapacity() > 0 } })
-                .minByOrNull { it.store.getUsedCapacity() }
+            room.bySort(FIND_MY_CREEPS, f = hasRole(Role.UPGRADER) and hasFreeCapacity,
+                sort = byMostFree then byDistance(this.pos) )
 
         BUILDERS -> // Supply builder creeps
             room.find(FIND_MY_CREEPS, options { filter = { it.memory.role == Role.BUILDER &&
@@ -82,6 +102,11 @@ fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
 
         TOWERS -> // Supply towers
             room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_TOWER &&
+                    it.unsafeCast<StoreOwner>().store.getFreeCapacity(RESOURCE_ENERGY) > 100 } })
+                .minByOrNull { it.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
+
+        STORAGE -> // Supply storage IF a container is full
+            room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_STORAGE &&
                     it.unsafeCast<StoreOwner>().store.getFreeCapacity(RESOURCE_ENERGY) > 0 } })
                 .minByOrNull { it.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
 
@@ -92,8 +117,8 @@ fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
 
 fun Creep.pickupLocationBias(): RoomPosition {
     var category = this.memory.distributionCategory
-    if (category == 0) pickDistributionCategory(this, room)
-    category = this.memory.distributionCategory
+    //if (category == 0) pickDistributionCategory(this, room)
+    //category = this.memory.distributionCategory
     if (category == 0) category = name.hashCode() % (catCount()-1) + 1
 
     val biasPos = when (intToCat(category)) {
@@ -104,7 +129,7 @@ fun Creep.pickupLocationBias(): RoomPosition {
             options { filter = { it.structureType == STRUCTURE_TOWER } }).firstOrNull()
         else -> null
     }
-    return (biasPos ?: room.find(FIND_MY_SPAWNS).first()).pos
+    return (biasPos ?: this).pos
 }
 
 
