@@ -196,7 +196,12 @@ fun Creep.upgrader() {
     } else {
         val container = findBufferContainer()
         if (container != null && store.getUsedCapacity() < 10 && container.store[RESOURCE_ENERGY] > 0) {
-            this.withdraw(container, RESOURCE_ENERGY)
+            if (container.pos.inRangeTo(pos, 1)) {
+                this.withdraw(container, RESOURCE_ENERGY)
+            } else {
+                collectFrom(container)
+                return
+            }
         }
         putEnergy(room.controller)
     }
@@ -276,10 +281,32 @@ fun Creep.prospector() {
         }
         collectFrom(assignedSource)
     } else {
-        if (room.controller!!.ticksToDowngrade < 9000) {
-            putEnergy(room.controller)
-            return
+        if (room.controller!!.ticksToDowngrade < 9000 || room.controller!!.level == 1) {
+            // And also its the closest creep to the controller
+            val closestCreep = room.bySort(FIND_CREEPS, f = hasRole(Role.PROSPECTOR),
+                sort = byDistance(room.controller!!.pos) then byTrueFirst { it.name == name })
+            if (closestCreep == this) {
+                putEnergy(room.controller)
+                return
+            }
         }
+        // Try to build construction sites in the assigned room
+        if (room.name == memory.assignedRoom) {
+            val site = getConstructionSite(room)
+            if (site != null) {
+                putEnergy(site)
+                return
+            }
+            // OR repair structures in the assigned room
+            val toRepair: Structure? = findMilitaryRepairTarget(4000,  bias = pos) ?:
+            findInfrastructureRepairTarget(4000, bias = pos)
+            if (toRepair != null) {
+                room.visual.circle(toRepair.pos, options { fill = "#00FFAA"; opacity=0.3; radius = 0.3 })
+                goRepair(toRepair)
+                return
+            }
+        }
+
         if (memory.homeRoom == "")
             return
         if (gotoHomeRoom()) return
@@ -366,13 +393,12 @@ fun Creep.settler() {
                 return
             }
 
-
             var toRepair: Structure? = findMilitaryRepairTarget(4000,  bias = pos) ?:
                 findInfrastructureRepairTarget(4000, bias = pos) ?:
-                findMilitaryRepairTarget(bias = cornerBias())
+                findMilitaryRepairTarget(10000, bias = cornerBias())
 
             if (toRepair != null) {
-                room.visual.circle(toRepair.pos, options { fill = "#00FFAA"; opacity=0.5; radius = 0.3 })
+                room.visual.circle(toRepair.pos, options { fill = "#00FFAA"; opacity=0.3; radius = 0.3 })
                 goRepair(toRepair)
                 return
             }
@@ -383,8 +409,11 @@ fun Creep.settler() {
                 return
             }
 
-            toRepair = findRepairTarget(5000) ?: findRepairTarget(10000)
-            if (toRepair != null) {
+            toRepair = findRepairTarget(5000) ?:
+                findMilitaryRepairTarget(20000) ?:
+                findRepairTarget(10000) ?:
+                findRepairTarget(20000)
+                    if (toRepair != null) {
                 goRepair(toRepair)
                 return
             }
@@ -425,6 +454,37 @@ fun Creep.outer_harvester() {
     val sourceVal = source?.energy ?: -1
     val container = findBufferContainer()
     val containerVal = container?.store?.getUsedCapacity(RESOURCE_ENERGY) ?: 0
+
+    // SUPPLY TOWER
+    val closestTower = room.bySort(STRUCTURE_TOWER, f = hasAtMostEnergy(800) and withinRange(2,pos),
+        sort = byDistance(pos))?.unsafeCast<StructureTower>()
+    if ((store.getUsedCapacity(RESOURCE_ENERGY) >= 40 || sourceVal == 0) && closestTower != null) {
+        if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
+            collectFrom(container)
+            return
+        }
+        if (pos.getRangeTo(closestTower) > 1) {
+            putEnergy(closestTower)
+            return
+        } else {
+            transfer(closestTower, RESOURCE_ENERGY)
+        }
+    }
+
+    // IF EMPTY, BUILD CONSTRUCTION SITES
+    if (sourceVal == 0) {
+        val closestConstructionSite = getConstructionSite(room)
+        if (closestConstructionSite != null && closestConstructionSite.pos.getRangeTo(pos) < 10) {
+            if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
+                collectFrom(container)
+                return
+            }
+            putEnergy(closestConstructionSite)
+            return
+        }
+    }
+
+    // IF EMPTY AND CONTROLLER, PUT ENERGY IN CONTROLLER
     if ((sourceVal == 0 || containerVal == 2000) && pos.getRangeTo(room.controller!!) < 5) {
         if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
             if (sourceVal == 0) {
@@ -481,8 +541,9 @@ fun Creep.caravan() {
         val destination = findCaravanPickupEnergy(bias = cornerBias())
         if (room.getTotalContainerEnergy() < this.store.getCapacity()!!*2) {
             // Wait for it to fill up, close to the source
-            say("Waiting")
-            moveIfNotInRange(destination ?: return, ERR_NOT_IN_RANGE)
+            if (Game.time % 4 == name.hashCode() % 4)
+                say("Waiting")
+            moveWithin(destination!!.pos, 2)
             return
         }
         collectFrom(destination)

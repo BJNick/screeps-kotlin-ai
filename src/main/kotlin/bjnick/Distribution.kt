@@ -26,7 +26,7 @@ fun desiredCountOf(category: DistributionCategory): Int = when (category) {
     CONTROLLER -> 2
     BUILDERS -> 1
     TOWERS -> 1
-    STORAGE -> 0 // UNUSED FOR NOW
+    STORAGE -> 1 // UNUSED FOR NOW
     else -> 0
 }
 

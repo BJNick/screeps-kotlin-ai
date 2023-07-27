@@ -280,7 +280,7 @@ fun Creep.moveWithin(target: RoomPosition, dist: Int = 0): ScreepsReturnCode {
 }
 
 fun costCallbackAvoidBorder(roomName: String, costMatrix: PathFinder.CostMatrix): PathFinder.CostMatrix {
-    val newCost = 6 // 6 is more than swamp 5
+    val newCost = 10 // more than swamp 5
     for (x in 0..49) {
         costMatrix[x, 0] = newCost
         costMatrix[x, 49] = newCost
@@ -367,7 +367,7 @@ fun Creep.getVacantDistributorCreep(room: Room): StoreOwner? {
 fun Creep.getConstructionSite(room: Room): ConstructionSite? {
     val containerSite = room.find(FIND_CONSTRUCTION_SITES, options { filter = { it.structureType == STRUCTURE_CONTAINER } }).firstOrNull()
     if (containerSite != null) return containerSite
-    return room.find(FIND_CONSTRUCTION_SITES).sortedBy { it.pos.getRangeTo(pos) }.minByOrNull { -it.progress }
+    return room.bySort(FIND_CONSTRUCTION_SITES, sort = byConstructionProgress then byDistance(pos)) as? ConstructionSite
 }
 
 // Structures that need to be repaired, lowest hits first

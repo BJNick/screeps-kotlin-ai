@@ -1,4 +1,5 @@
 package bjnick
+import defendRoom
 import distributesEnergy
 import role
 import screeps.api.*
@@ -32,8 +33,8 @@ fun bestOffRoad(maxEnergy: Int): bodyArray {
     }}
 }
 
-fun bestOnRoad(maxEnergy: Int): bodyArray {
-    val maxSmallParts = maxEnergy / 50
+fun bestOnRoad(maxEnergy: Int, maxCapacity: Int = 10000): bodyArray {
+    val maxSmallParts = min(maxEnergy / 50, maxCapacity / 50 * 3 / 2)
     return Array(maxSmallParts) { i -> when (i%3) {
         0 -> MOVE
         else -> CARRY
@@ -58,6 +59,7 @@ fun bestFastWorker(maxEnergy: Int): bodyArray {
     }} + Array(maxSmallParts) { MOVE }
 }
 
+// TODO: Actually off-road is MOVE/WORK while on-road is MOVE/WORK/WORK
 fun bestFastRoadWorker(maxEnergy: Int): bodyArray {
     val maxBigParts = (maxEnergy-50) / 150
     val remainingEnergy = maxEnergy - 50 - maxBigParts*150
@@ -65,6 +67,46 @@ fun bestFastRoadWorker(maxEnergy: Int): bodyArray {
     return arrayOf(CARRY) + Array(maxBigParts*2) { i -> when (i%2) {
         0 -> MOVE
         else -> WORK
+    }} + Array(maxSmallParts) { MOVE }
+}
+
+// Example: CARRY MOVE WORK WORK MOVE CARRY WORK MOVE CARRY CARRY MOVE CARRY MOVE
+fun mixedRoadFastWorker(maxEnergy: Int, workParts: Int = 3): bodyArray {
+    val maxDoubleWorkUnits = min(workParts/2,(maxEnergy) / 250)
+    val maxSingleWorkUnits = min(workParts%2,(maxEnergy-maxDoubleWorkUnits*250) / 200)
+    val remainingEnergy = maxEnergy  - maxDoubleWorkUnits*250 - maxSingleWorkUnits*200
+    val maxDoubleCargoUnits = remainingEnergy / 150
+    val maxSingleCargoUnits = remainingEnergy % 150 / 100
+    val maxSmallParts = remainingEnergy % 150 % 100 / 50
+    return /*arrayOf(CARRY) +*/ Array(maxDoubleWorkUnits*3) { i -> when (i%3) {
+        0 -> MOVE
+        1 -> WORK
+        else -> WORK
+    }} + Array(maxSingleWorkUnits*3) { i -> when (i%3) {
+        0 -> MOVE
+        1 -> CARRY
+        else -> WORK
+    }} + Array(maxDoubleCargoUnits*3) { i -> when (i%3) {
+        0 -> MOVE
+        1 -> CARRY
+        else -> CARRY
+    }} + Array(maxSingleCargoUnits*2) { i -> when (i%2) {
+        0 -> MOVE
+        else -> CARRY
+    }} + Array(maxSmallParts) { MOVE }
+}
+
+// Off-road, Example: CARRY MOVE WORK MOVE WORK MOVE CARRY
+fun mixedFastWorker(maxEnergy: Int, workParts: Int = 3): bodyArray {
+    val maxSingleWorkUnits = min(workParts,(maxEnergy) / 200)
+    val maxCargoUnits = (maxEnergy-maxSingleWorkUnits*200) / 100
+    val maxSmallParts = (maxEnergy-maxSingleWorkUnits*200) % 100 / 50
+    return /*arrayOf(CARRY) +*/ Array(maxSingleWorkUnits*2) { i -> when (i%2) {
+        0 -> MOVE
+        else -> WORK
+    }} + Array(maxCargoUnits*2) { i -> when (i%2) {
+        0 -> MOVE
+        else -> CARRY
     }} + Array(maxSmallParts) { MOVE }
 }
 
@@ -152,6 +194,7 @@ fun spawnCreeps(
     // IF THERE ARE HOSTILES, ENTER EMERGENCY
     val hostilesPresent = Game.rooms.values.any { it.find(FIND_HOSTILE_CREEPS).isNotEmpty() }
 
+    val safeModeActive = (Game.rooms[Memory.defendRoom]?.controller?.safeMode ?: 0) > 200
 
     val (role: String, body: bodyArray) = when {
 
@@ -168,8 +211,8 @@ fun spawnCreeps(
         creeps.count { it.memory.role == Role.CARRIER } < 4 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
 
         // MILITARY
-        creeps.count { it.memory.role == Role.RANGER && it.ticksToLive>100 } < 1 -> Pair(Role.RANGER, bestRangedFighter(UNLIMITED))
-        creeps.count { it.memory.role == Role.BOUNCER && it.ticksToLive>100 } < 1 -> Pair(Role.BOUNCER, bestMeleeFighter(UNLIMITED))
+        !safeModeActive && creeps.count { it.memory.role == Role.RANGER && it.ticksToLive>100 } < 1 -> Pair(Role.RANGER, bestRangedFighter(capacity))
+        !safeModeActive && creeps.count { it.memory.role == Role.BOUNCER && it.ticksToLive>100 } < 1 -> Pair(Role.BOUNCER, bestMeleeFighter(capacity))
         ///
 
         creeps.count { it.memory.role == Role.UPGRADER } < 2 -> Pair(Role.UPGRADER, bestWorker(capacity))
@@ -190,12 +233,7 @@ fun spawnCreeps(
         //creeps.count { it.memory.role == Role.REPAIRER } < 2 -> Pair(Role.REPAIRER, bestOffRoadWorker(capacity))
 
         // Create more prospectors only if all creeps have more than 100 ticks to live
-        // creeps.count { it.memory.role == Role.PROSPECTOR } < 4 && creeps.count { it.ticksToLive<100 } == 0 -> Pair(Role.PROSPECTOR, bestOffRoadWorker(capacity))
-
-        //creeps.count { it.memory.role == Role.CLAIMER } < 1 -> Pair(Role.CLAIMER, arrayOf(MOVE, MOVE, MOVE, MOVE, CLAIM))
-
-        // FOR THE EXTRA EXPANSION
-        //creeps.count { it.memory.role == Role.PROSPECTOR } < 1 -> Pair(Role.PROSPECTOR, bestOffRoadWorker(capacity))
+        // creeps.count { it.memory.role == Role.PROSPECTOR } < 4 && creeps.count { it.ticksToLive<100 } == 0 -> Pair(Role.PROSPECTOR, mixedFastWorker(capacity))
 
         ///// FOR THE OTHER ROOM
         creeps.count { it.memory.role == Role.OUTER_HARVESTER && it.ticksToLive>100 } < 2 -> Pair(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity))
@@ -203,23 +241,27 @@ fun spawnCreeps(
         // Reduced since roads were built
         creeps.count { it.memory.role == Role.SETTLER && it.ticksToLive>50 } < 2 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
 
-        creeps.count { it.memory.role == Role.CARAVAN } < 1 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED))
+        creeps.count { it.memory.role == Role.CARAVAN } < 1 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED, 1000))
 
 
         // THIS ROOM
-        creeps.count { it.memory.role == Role.CARRIER } < 5 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
+        creeps.count { it.memory.role == Role.CARRIER } < 6 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
         creeps.count { it.memory.role == Role.UPGRADER } < 3 -> Pair(Role.UPGRADER, bestWorker(capacity))
 
 
         creeps.count { it.memory.role == Role.OUTER_HARVESTER && it.ticksToLive>100 } < 4 -> Pair(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity))
 
-        creeps.count { it.memory.role == Role.CARAVAN } < 3 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED))
+        creeps.count { it.memory.role == Role.CARAVAN } < 3 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED, 1000))
 
         // TOO MANY, CREATE CONGESTION
         //creeps.count { it.memory.role == Role.SETTLER } < 4 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
 
         // EXTRA CARAVAN
         //creeps.count { it.memory.role == Role.CARAVAN } < 3 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED))
+
+        // FOR THE EXTRA EXPANSION
+        //creeps.count { it.memory.role == Role.CLAIMER } < 1 -> Pair(Role.CLAIMER, arrayOf(MOVE, MOVE, MOVE, MOVE, CLAIM))
+        creeps.count { it.memory.role == Role.PROSPECTOR } < 4 -> Pair(Role.PROSPECTOR, mixedFastWorker(capacity, 3))
 
 
         else -> return

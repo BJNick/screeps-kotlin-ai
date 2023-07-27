@@ -208,7 +208,7 @@ fun recordGraph(room: Room, every: Int, x: Double, y: Double, showVis: Boolean =
     val xOffset = x-maxPoints*separation/2
 
     val extensionPolyLine = room.memory.energyGraphData.dropLast(1).takeLast(maxPoints)
-        .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.extensionEnergy*0.005+y)
+        .mapIndexed { index, dataPoint -> arrayOf(index*separation+xOffset, -dataPoint.extensionEnergy*0.003+y)
     }.toTypedArray()
     room.visual.poly(extensionPolyLine, options { stroke = "#FFFF00"; opacity = 0.5 })
 

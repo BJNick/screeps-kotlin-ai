@@ -3,6 +3,7 @@ package bjnick
 import enableVisualizations
 import forceReassignDistributionCategories
 import forceReassignSources
+import graphOnTopSide
 import ignorePlayers
 import lastTripDuration
 import org.w3c.dom.Text
@@ -164,7 +165,8 @@ fun gameLoop() {
 
     // Show graph for reach owned room
     Game.rooms.values.forEach {
-        recordGraph(it, 15, 15.0, 48.0, showVis = Memory.visualizeGraphs && Memory.enableVisualizations && !saveCPU)
+        val y = if (it.memory.graphOnTopSide) 10.0 else 48.0
+        recordGraph(it, 15, 15.0, y, showVis = Memory.visualizeGraphs && Memory.enableVisualizations && !saveCPU)
     }
 
     // Show CPU usage
@@ -253,7 +255,9 @@ fun defendRoom(room: Room) {
         towers.forEach {
             val repairTarget = it.findTowerRepairTarget(500) ?:
                 it.findTowerRepairTarget(30000, STRUCTURE_CONTAINER) ?:
-                it.findTowerRepairTarget(5000)
+                it.findTowerRepairTarget(5000) ?:
+                it.findTowerRepairTarget(10000, STRUCTURE_RAMPART) ?:
+                it.findTowerRepairTarget(10000, STRUCTURE_WALL)
             if (repairTarget != null)
                 it.repair(repairTarget)
         }

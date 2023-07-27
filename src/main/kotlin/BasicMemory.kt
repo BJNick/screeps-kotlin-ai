@@ -71,6 +71,7 @@ var RoomMemory.sourceAssignedHarvesters: Array<Array<String>> by memory { arrayO
 
 var RoomMemory.distributionAssignments: Array<String> by memory { arrayOf() }
 
+var RoomMemory.graphOnTopSide: Boolean by memory { false }
 
 // GLOBAL memory
 

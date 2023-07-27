@@ -37,12 +37,15 @@ fun onOppositeSideOf(pivot: RoomPosition, side: RoomPosition): Filter<HasPositio
 fun hasAtLeastEnergy(amount: Int): Filter<Any> =
     { creep -> creep.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) >= amount }
 
+fun hasAtMostEnergy(amount: Int): Filter<Any> =
+    { creep -> creep.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) <= amount }
+
 fun withinRange(range: Int, pos: RoomPosition): Filter<HasPosition> = { o -> o.pos.inRangeTo(pos, range) }
 
 val notControllerBuffer: Filter<HasPosition> = {
     it ->
     val room = Game.rooms[it.pos.roomName]!!
-    !withinRange(3, it.pos)(room.controller!!) && (room.byOrder(FIND_SOURCES, f=withinRange(1, it.pos)) == null)
+    !withinRange(3, it.pos)(room.controller!!) || (room.byOrder(FIND_SOURCES, f=withinRange(1, it.pos)) != null)
 }
 
 fun isUnoccupied(except: Creep? = null): Filter<HasPosition> = {
@@ -107,9 +110,13 @@ val byBorderProximity: Sorter<HasPosition, Int> = {
 fun byLeastBodyParts(vararg parts: BodyPartConstant): Sorter<Creep, Int> = { creep -> creep.body.count { it.type in parts } }
 fun byMostBodyParts(vararg parts: BodyPartConstant): Sorter<Creep, dynamic> = byLeastBodyParts(*parts).reversed()
 
+fun <T> byTrueFirst(filter: Filter<T>): Sorter<T, Boolean> = { !filter(it) }
+
 fun byEuclideanDistance(to: RoomPosition, scale: Int = 1): Sorter<HasPosition, Int> = {
     ((it.pos.x - to.x)*(it.pos.x - to.x) + (it.pos.y - to.y)*(it.pos.y - to.y))/scale
 }
+
+val byConstructionProgress: Sorter<ConstructionSite, Int> = { -it.progress }
 
 /**
  * Takes in any number of find constants and returns an object that matches the first one that is found
