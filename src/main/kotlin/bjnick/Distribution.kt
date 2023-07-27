@@ -5,6 +5,7 @@ import distributionAssignments
 import distributionCategory
 import role
 import screeps.api.*
+import screeps.api.structures.StructureContainer
 
 // A module to manage energy distribution via orders to haulers
 
@@ -92,8 +93,14 @@ fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
             getVacantSpawnOrExt(room)
 
         CONTROLLER -> // Supply upgrader creeps
-            room.bySort(FIND_MY_CREEPS, f = hasRole(Role.UPGRADER) and hasFreeCapacity,
-                sort = byMostFree then byDistance(this.pos) )
+        { // Either container within 3 squares of controller, or upgrader creep
+            room.byOrder(STRUCTURE_CONTAINER, f = hasFreeCapacity and withinRange(3, room.controller!!.pos))
+                ?.unsafeCast<StructureContainer>() ?:
+            room.bySort(
+                FIND_MY_CREEPS, f = hasRole(Role.UPGRADER) and hasFreeCapacity,
+                sort = byMostFree then byDistance(this.pos)
+            )
+        }
 
         BUILDERS -> // Supply builder creeps
             room.find(FIND_MY_CREEPS, options { filter = { it.memory.role == Role.BUILDER &&

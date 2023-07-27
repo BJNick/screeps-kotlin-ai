@@ -137,7 +137,8 @@ fun gameLoop() {
                 Role.SETTLER,
                 Role.OUTER_HARVESTER,
                 Role.CARAVAN,
-                Role.RANGER
+                Role.RANGER,
+                Role.BOUNCER,
             )
         }
             .sortedBy { it.memory.role }
@@ -169,6 +170,11 @@ fun gameLoop() {
     // Show CPU usage
     if (Memory.outputCPUUsage)
         console.log("Post-Processing CPU: ${Game.cpu.getUsed() - cpuBegin}")
+
+    // Send notification if CPU bucket is low
+    if (Game.cpu.bucket < 8000) {
+        Game.notify("CPU bucket is low: ${Game.cpu.bucket}", 60)
+    }
 }
 
 fun Room.showCreepList(role: String, x: Double, y: Double) {

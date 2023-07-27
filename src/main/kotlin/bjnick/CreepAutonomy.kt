@@ -270,6 +270,7 @@ fun Creep.moveWithin(target: RoomPosition, dist: Int = 0): ScreepsReturnCode {
         return moveTo(target, options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle>
                 { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_DASHED };
             costCallback = ::costCallbackAvoidBorder;
+            range = dist;
             reusePath = if (memory.preferredPathCache == 0) 5 else memory.preferredPathCache;
             ignoreCreeps = nearBorder() || !hasCreepsNearby(1)  })
     } else {

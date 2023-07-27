@@ -35,6 +35,7 @@ object Role {
     val CARAVAN = "CARAVAN"
     val RANGER = "RANGER"
     val ERRANDER = "ERRANDER"
+    val BOUNCER = "BOUNCER"
 }
 
 fun Creep.executeRole() {
@@ -56,6 +57,7 @@ fun Creep.executeRole() {
         Role.CARAVAN -> caravan()
         Role.RANGER -> ranger()
         Role.ERRANDER -> errander()
+        Role.BOUNCER -> bouncer()
     }
 }
 
@@ -72,6 +74,7 @@ fun Creep.pathColor() = when (memory.role) {
     Role.CARAVAN -> "#FFFF00"
     Role.RANGER -> "#FF00FF"
     Role.ERRANDER -> "#AAFF00"
+    Role.BOUNCER -> "#FF0000"
     else -> "#FFFFFF"
 }
 
@@ -130,7 +133,7 @@ fun Creep.harvester() {
         if (store.getFreeCapacity() > 0)
             collectFromASource()
         if (container != null && container.hits >= 35000 && store.getUsedCapacity() > 40) {
-            this.fastTransfer(container, RESOURCE_ENERGY)
+            this.transfer(container, RESOURCE_ENERGY)
         }
     } else {
         if (container != null) {
@@ -191,6 +194,10 @@ fun Creep.upgrader() {
                 memory.collecting = false // keep upgrading even if not full
         }
     } else {
+        val container = findBufferContainer()
+        if (container != null && store.getUsedCapacity() < 10 && container.store[RESOURCE_ENERGY] > 0) {
+            this.withdraw(container, RESOURCE_ENERGY)
+        }
         putEnergy(room.controller)
     }
 }
@@ -304,19 +311,14 @@ fun Creep.claimer() {
 }
 
 fun Creep.settler() {
-    memory.preferredPathCache = 10
-
-    // TODO REMOVE
-    memory.targetPos = AbstractPos(0,0,"")
-    memory.targetID = ""
-    memory.targetTask = ""
+    //memory.preferredPathCache = 10
 
     if (!loadAssignedRoomAndHome()) return
     recordBorderMovements()
 
     if (stepAwayFromBorder()) return
 
-    if (executeCachedTask()) return // TODO TESTING
+    //if (executeCachedTask()) return // TODO TESTING
 
     if (isCollecting()) {
         if (gotoAssignedRoom()) return
@@ -339,6 +341,19 @@ fun Creep.settler() {
         if (room.controller!!.ticksToDowngrade < 9000)
             putEnergy(room.controller)
         else {
+
+            if (store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+                // Find closest reparable object and repair it on the way to other tasks
+                val toRepairClosest = room.bySort(
+                    FIND_STRUCTURES, f = lessThanMaxHits and lessHitsThan(5000)
+                            and withinRange(3, pos), sort = byDistance(pos)
+                )
+                if (toRepairClosest != null) {
+                    repair(toRepairClosest)
+                }
+            }
+
+
             val wallSites = findWallConstructionSite()
             if (wallSites != null) {
                 putEnergy(wallSites)
@@ -352,11 +367,12 @@ fun Creep.settler() {
             }
 
 
-            var toRepair: Structure? = findInfrastructureRepairTarget(4000, bias = pos) ?:
+            var toRepair: Structure? = findMilitaryRepairTarget(4000,  bias = pos) ?:
+                findInfrastructureRepairTarget(4000, bias = pos) ?:
                 findMilitaryRepairTarget(bias = cornerBias())
 
             if (toRepair != null) {
-                room.visual.circle(toRepair.pos, options { stroke = "#00FFAA"; opacity=0.5; radius = 0.3 })
+                room.visual.circle(toRepair.pos, options { fill = "#00FFAA"; opacity=0.5; radius = 0.3 })
                 goRepair(toRepair)
                 return
             }
@@ -398,7 +414,7 @@ fun Creep.outer_harvester() {
     if (isCollecting() && gotoAssignedRoom()) return
 
     if (Game.time % 4 == name.hashCode() % 4)
-        say(arrayOf("Want peace", "No attac", "We mine").random(), true) // TODO: Tell other players
+        say(arrayOf(">:(", "No attac", "We mine").random(), true) // TODO: Tell other players
 
     if (store.getUsedCapacity(RESOURCE_ENERGY) > 0 && room.controller!!.ticksToDowngrade < 9500 && pos.getRangeTo(room.controller!!) < 5) {
         putEnergy(room.controller)
@@ -421,6 +437,22 @@ fun Creep.outer_harvester() {
         }
         putEnergy(room.controller)
         return
+    }
+
+    // Also if empty and NO CONTROLLER, repair things around
+    if (sourceVal == 0) {
+        val toRepair = room.bySort(STRUCTURE_ROAD, f = lessThanMaxHits and lessHitsThan(4500)
+                and withinRange(10, pos), sort = byDistance(pos))
+        if (toRepair != null) {
+            if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
+                collectFrom(container)
+                return
+            }
+            goRepair(toRepair)
+            return
+        }
+    } else {
+        moveWithin(source!!.pos, 1)
     }
 
     // Then do basic harvester stuff
@@ -446,13 +478,14 @@ fun Creep.caravan() {
             return
         }
 
+        val destination = findCaravanPickupEnergy(bias = cornerBias())
         if (room.getTotalContainerEnergy() < this.store.getCapacity()!!*2) {
             // Wait for it to fill up, close to the source
             say("Waiting")
-            moveIfNotInRange(findCaravanPickupEnergy() ?: return, ERR_NOT_IN_RANGE)
+            moveIfNotInRange(destination ?: return, ERR_NOT_IN_RANGE)
             return
         }
-        collectFrom(findCaravanPickupEnergy())
+        collectFrom(destination)
     } else {
         if (gotoHomeRoom()) return
         putEnergy(findConvenientContainer())
@@ -488,7 +521,7 @@ fun Creep.ranger() {
 
         val closestDistance = closestHostile.pos.getRangeTo(this.pos)
 
-        val closestRampart = room.bySort(STRUCTURE_RAMPART,
+        val closestRampart = room.bySort(STRUCTURE_RAMPART, f = isUnoccupied(this),
             sort = byEuclideanDistance(closestHostile.pos))?.unsafeCast<StructureRampart>()
 
         if (closestRampart != null && closestRampart.pos.getRangeTo(closestHostile.pos) <= 3) {
@@ -518,8 +551,9 @@ fun Creep.ranger() {
             // MOVE TOWARDS WALL IF ENEMY IS ON OPPOSITE SIDE
             // IF ENEMY ON SAME SIDE, MOVE TOWARDS ENEMY
             val onTheOtherSide = !onOppositeSideOf(this.pos, closestWallToEnemy.pos)(closestHostile)
+            val wallRuinPresent = room.byOrder(FIND_RUINS, f = { it.structure == STRUCTURE_WALL }) != null
 
-            if (onTheOtherSide)
+            if (onTheOtherSide && !wallRuinPresent)
                 moveWithin(closestWallToEnemy.pos, 1)
             else
                 moveWithin(closestHostile.pos, 3)
@@ -528,6 +562,12 @@ fun Creep.ranger() {
             room.visual.circle(closestWallToEnemy.pos, options { radius = 0.5; fill = "#ffAA00"; opacity = 0.5 })
         }
 
+
+        // IF CLOSE ENOUGH, ATTACK!!!
+        if (closestDistance <= 1) {
+            // ATTACK (MASS)
+            rangedMassAttack()
+        } else
         // IF CLOSE ENOUGH, SHOOT!!!
         if (closestDistance <= 3) {
             val toAttack = room.bySort(FIND_HOSTILE_CREEPS,
@@ -614,6 +654,13 @@ fun Creep.errander() {
             val other = otherErranders.bySort(sort = byDistance(it.pos))?.unsafeCast<Creep>()
             if (other == null || other.pos.getRangeTo(it.pos) > 3) {
                 // No other erranders are close to this upgrader
+                val buffer = room.byOrder(STRUCTURE_CONTAINER, f = hasFreeCapacity and withinRange(3, room.controller!!.pos))
+                    ?.unsafeCast<StructureContainer>()
+                if (buffer != null) {
+                    putEnergy(buffer)
+                    return
+                }
+
                 if (it.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
                     putEnergy(it)
                     return
@@ -631,3 +678,77 @@ fun Creep.errander() {
     }
 }
 
+
+
+fun Creep.bouncer() {
+    if (!loadAssignedRoomAndHome()) return
+    recordBorderMovements()
+
+    if (stepAwayFromBorder()) return
+
+    if (Memory.defendRoom == "") {
+        say("No room!")
+        return
+    }
+
+    val hostileCreeps = room.find(FIND_HOSTILE_CREEPS)
+
+    val closestHostile: HasPosition? = room.bySort(FIND_HOSTILE_CREEPS, sort = byDistance(this.pos))?.unsafeCast<HasPosition>()
+        ?: room.byOrder(FIND_FLAGS, f = { it.name == "Enemy" })?.unsafeCast<HasPosition>()
+
+    if (closestHostile != null) {
+        // HOSTILE MODE ACTIVATED
+
+        val mostDangerous: Creep = room.bySort(FIND_HOSTILE_CREEPS,
+            sort = byMostBodyParts(ATTACK, RANGED_ATTACK)).unsafeCast<Creep>()
+        val healer: Creep? = room.bySort(FIND_HOSTILE_CREEPS, f = hasBodyPart(HEAL), sort = byMostBodyParts(HEAL))?.unsafeCast<Creep>()
+
+
+        val closestDistance = closestHostile.pos.getRangeTo(this.pos)
+
+        val closestRampart = room.bySort(STRUCTURE_RAMPART, f = isUnoccupied(this),
+            sort = byEuclideanDistance(closestHostile.pos))?.unsafeCast<StructureRampart>()
+
+        if (closestRampart != null && closestRampart.pos.getRangeTo(closestHostile.pos) <= 1) {
+            // HIDE WITHIN RAMPART
+            moveWithin(closestRampart.pos, 0)
+        } else if (closestDistance > 1) {
+            // MOVE TOWARDS WALL THAT IS CLOSEST TO ENEMY
+            val closestWallToEnemy = room.bySort(
+                STRUCTURE_WALL,
+                sort = byEuclideanDistance(closestHostile.pos)
+            ).unsafeCast<StructureWall>()
+
+            // MOVE TOWARDS WALL IF ENEMY IS ON OPPOSITE SIDE
+            // IF ENEMY ON SAME SIDE, MOVE TOWARDS ENEMY
+            val onTheOtherSide = !onOppositeSideOf(this.pos, closestWallToEnemy.pos)(closestHostile)
+
+            if (onTheOtherSide)
+                moveWithin(closestWallToEnemy.pos, 1)
+            else
+                moveWithin(closestHostile.pos, 1)
+
+            // visualize
+            room.visual.circle(closestWallToEnemy.pos, options { radius = 0.4; fill = "#ffAA00"; opacity = 0.5 })
+        }
+
+        // IF CLOSE ENOUGH, ATTACK!!!
+        if (closestDistance <= 1) {
+            val toAttack = room.bySort(FIND_HOSTILE_CREEPS, f = withinRange(1, this.pos),
+                sort = byMostBodyParts(ATTACK, RANGED_ATTACK) then byHits).unsafeCast<Creep>()
+            // ATTACK (MELEE)
+            attack(toAttack)
+        }
+
+    } else {
+        // PEACEFUL MODE
+        if (moveToRoom(Memory.defendRoom)) return
+
+        val outpostFlag = Game.flags["BouncerOutpost"]
+        if (outpostFlag != null) {
+            moveWithin(outpostFlag.pos)
+        }
+    }
+
+
+}

@@ -101,7 +101,7 @@ fun optimizedBuilder(maxEnergy: Int): bodyArray {
 
 fun bestRangedFighter(maxEnergy: Int): bodyArray {
     val maxBigParts = maxEnergy / 200
-    val remainingEnergy = maxEnergy - 50 - maxBigParts*200
+    val remainingEnergy = maxEnergy - maxBigParts*200
     val maxSmallParts = remainingEnergy / 60
     return Array(maxSmallParts*2) { i -> when (i%2) {
         0 -> TOUGH
@@ -109,6 +109,19 @@ fun bestRangedFighter(maxEnergy: Int): bodyArray {
     }} + Array(maxBigParts*2) { i -> when (i%2) {
         0 -> MOVE
         else -> RANGED_ATTACK
+    }}
+}
+
+fun bestMeleeFighter(maxEnergy: Int): bodyArray {
+    val maxBigParts = maxEnergy / (80+50)
+    val remainingEnergy = maxEnergy - maxBigParts*(80+50)
+    val maxSmallParts = remainingEnergy / 60
+    return Array(maxSmallParts*2) { i -> when (i%2) {
+        0 -> TOUGH
+        else -> MOVE
+    }} + Array(maxBigParts*2) { i -> when (i%2) {
+        0 -> MOVE
+        else -> ATTACK
     }}
 }
 
@@ -131,11 +144,23 @@ fun spawnCreeps(
     fun limit(v: Int) = min(v, 850) // an arbitrary limit to avoid too many parts
     val capacity = limit(spawn.room.energyCapacityAvailable)
     val UNLIMITED = spawn.room.energyCapacityAvailable
+    val currentlyAvailable = spawn.room.energyAvailable
 
     val maxWorkParts = spawn.room.energyCapacityAvailable / 100 - 1
     val harvesterCount = spawn.room.optimalHarvesters(maxWorkParts)
 
+    // IF THERE ARE HOSTILES, ENTER EMERGENCY
+    val hostilesPresent = Game.rooms.values.any { it.find(FIND_HOSTILE_CREEPS).isNotEmpty() }
+
+
     val (role: String, body: bodyArray) = when {
+
+        // EMERGENCY MILITARY
+        hostilesPresent && creeps.count { it.memory.role == Role.BOUNCER && it.ticksToLive>100 } < 1 -> Pair(Role.BOUNCER, bestMeleeFighter(UNLIMITED))
+        hostilesPresent && creeps.count { it.memory.role == Role.RANGER && it.ticksToLive>100 } < 1 -> Pair(Role.RANGER, bestRangedFighter(UNLIMITED))
+        hostilesPresent && creeps.count { it.memory.role == Role.BOUNCER && it.ticksToLive>100 } < 2 -> Pair(Role.BOUNCER, bestMeleeFighter(UNLIMITED))
+        hostilesPresent && creeps.count { it.memory.role == Role.RANGER && it.ticksToLive>100 } < 2 -> Pair(Role.RANGER, bestRangedFighter(UNLIMITED))
+        hostilesPresent && creeps.count { it.memory.role == Role.BOUNCER && it.ticksToLive>100 } < 1 -> Pair(Role.BOUNCER, bestMeleeFighter(max(550, currentlyAvailable)))
 
         //creeps.count { it.memory.role == Role.SETTLER } < harvesterCount -> Pair(Role.SETTLER, bestMultipurpose(capacity))
         creeps.count { it.memory.role == Role.HARVESTER && it.ticksToLive>150 } < harvesterCount -> Pair(Role.HARVESTER, bestWorker(capacity))
@@ -143,7 +168,8 @@ fun spawnCreeps(
         creeps.count { it.memory.role == Role.CARRIER } < 4 -> Pair(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
 
         // MILITARY
-        creeps.count { it.memory.role == Role.RANGER && it.ticksToLive>150 } < 1 -> Pair(Role.RANGER, bestRangedFighter(UNLIMITED))
+        creeps.count { it.memory.role == Role.RANGER && it.ticksToLive>100 } < 1 -> Pair(Role.RANGER, bestRangedFighter(UNLIMITED))
+        creeps.count { it.memory.role == Role.BOUNCER && it.ticksToLive>100 } < 1 -> Pair(Role.BOUNCER, bestMeleeFighter(UNLIMITED))
         ///
 
         creeps.count { it.memory.role == Role.UPGRADER } < 2 -> Pair(Role.UPGRADER, bestWorker(capacity))
@@ -172,10 +198,10 @@ fun spawnCreeps(
         //creeps.count { it.memory.role == Role.PROSPECTOR } < 1 -> Pair(Role.PROSPECTOR, bestOffRoadWorker(capacity))
 
         ///// FOR THE OTHER ROOM
-        creeps.count { it.memory.role == Role.OUTER_HARVESTER } < 2 -> Pair(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity))
+        creeps.count { it.memory.role == Role.OUTER_HARVESTER && it.ticksToLive>100 } < 2 -> Pair(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity))
 
         // Reduced since roads were built
-        creeps.count { it.memory.role == Role.SETTLER } < 2 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
+        creeps.count { it.memory.role == Role.SETTLER && it.ticksToLive>50 } < 2 -> Pair(Role.SETTLER, bestOffRoadWorker(capacity))
 
         creeps.count { it.memory.role == Role.CARAVAN } < 1 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED))
 
@@ -185,7 +211,7 @@ fun spawnCreeps(
         creeps.count { it.memory.role == Role.UPGRADER } < 3 -> Pair(Role.UPGRADER, bestWorker(capacity))
 
 
-        creeps.count { it.memory.role == Role.OUTER_HARVESTER } < 4 -> Pair(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity))
+        creeps.count { it.memory.role == Role.OUTER_HARVESTER && it.ticksToLive>100 } < 4 -> Pair(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity))
 
         creeps.count { it.memory.role == Role.CARAVAN } < 3 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED))
 
@@ -194,8 +220,6 @@ fun spawnCreeps(
 
         // EXTRA CARAVAN
         //creeps.count { it.memory.role == Role.CARAVAN } < 3 -> Pair(Role.CARAVAN, bestOnRoad(UNLIMITED))
-
-
 
 
         else -> return

@@ -3,6 +3,7 @@ package bjnick
 import role
 import screeps.api.*
 import screeps.api.structures.Structure
+import screeps.api.structures.StructureContainer
 import kotlin.math.min
 
 // Define filter lambda type
@@ -38,6 +39,16 @@ fun hasAtLeastEnergy(amount: Int): Filter<Any> =
 
 fun withinRange(range: Int, pos: RoomPosition): Filter<HasPosition> = { o -> o.pos.inRangeTo(pos, range) }
 
+val notControllerBuffer: Filter<HasPosition> = {
+    it ->
+    val room = Game.rooms[it.pos.roomName]!!
+    !withinRange(3, it.pos)(room.controller!!) && (room.byOrder(FIND_SOURCES, f=withinRange(1, it.pos)) == null)
+}
+
+fun isUnoccupied(except: Creep? = null): Filter<HasPosition> = {
+    it -> val creeps = it.pos.lookFor(LOOK_CREEPS)
+    creeps!!.isEmpty() || creeps[0] == except
+}
 
 // Define an "and" operator for filters
 infix fun <T> Filter<T>.and(other: Filter<T>): Filter<T> = { this(it) && other(it) }
@@ -179,7 +190,7 @@ fun Creep.findConvenientEnergy(room: Room = this.room, bias: RoomPosition = pos,
     // If there is a container with enough energy, use it
     val harvesterContainer = room.bySort(
         preference,
-        f = hasUsedCapacity,
+        f = hasUsedCapacity and notControllerBuffer,
         sort = byEnoughEnergy(store.getFreeCapacity() / 2) then byDistance(
             bias,
             3
@@ -204,8 +215,8 @@ fun Creep.findCaravanPickupEnergy(room: Room = this.room, bias: RoomPosition = p
     // If there is a container with enough energy, use it
     val harvesterContainer = room.bySort(STRUCTURE_CONTAINER,
         f = hasUsedCapacity,
-        sort = byEnoughEnergy(store.getFreeCapacity()) then byDistance(room.controller!!.pos).reversed() then
-                byMostUsed then byDistance(bias, 5))
+        sort = byEnoughEnergy(store.getFreeCapacity()) then byDistance(bias, 3)
+                then byDistance(room.controller!!.pos).reversed() then byMostUsed)
 
     return harvesterContainer.unsafeCast<StoreOwner>()
 
