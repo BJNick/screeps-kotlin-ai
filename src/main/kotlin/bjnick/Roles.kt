@@ -273,6 +273,12 @@ fun Creep.prospector() {
             return
         if (gotoAssignedRoom()) return
 
+        val dropped = findDroppedEnergy(room)
+        if (dropped != null) {
+            collectFrom(dropped)
+            return
+        }
+
         val assignedSource = this.assignedSource(false)
         if (assignedSource == null) {
             say("No task")
