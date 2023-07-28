@@ -570,9 +570,9 @@ fun Room.getTotalContainerEnergy(): Int {
 
 fun Creep.recordBorderMovements() {
     if (atBorder()) {
-        if (memory.lastRoom == memory.assignedRoom && room.name == memory.homeRoom ||
-            room.name == memory.assignedRoom && memory.lastRoom == memory.homeRoom)
-            recordImportExport(memory.lastRoom, room.name, store.getUsedCapacity())
+        //if (memory.lastRoom == memory.assignedRoom && room.name == memory.homeRoom ||
+        //    room.name == memory.assignedRoom && memory.lastRoom == memory.homeRoom)
+        recordImportExport(memory.lastRoom, room.name, store.getUsedCapacity())
     }
     if (nearBorder()) {
         memory.lastRoom = room.name

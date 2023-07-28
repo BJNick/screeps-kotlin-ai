@@ -13,6 +13,7 @@ import preferredPathCache
 import prospectedCount
 import prospectingRooms
 import prospectingTargets
+import prospectorsUpgradeController
 import role
 import screeps.api.*
 import screeps.api.structures.*
@@ -298,20 +299,34 @@ fun Creep.prospector() {
         }
         // Try to build construction sites in the assigned room
         if (room.name == memory.assignedRoom) {
+            // TODO replace them with SETTLERS
+            val containerRepair = findContainerRepairTarget()
+            if (containerRepair != null) {
+                goRepair(containerRepair)
+                return
+            }
+
             val site = getConstructionSite(room)
             if (site != null) {
                 putEnergy(site)
                 return
             }
             // OR repair structures in the assigned room
-            val toRepair: Structure? = findMilitaryRepairTarget(4000,  bias = pos) ?:
-            findInfrastructureRepairTarget(4000, bias = pos)
+            val toRepair: Structure? = findMilitaryRepairTarget(5000,  bias = pos) ?:
+            findInfrastructureRepairTarget(5000, bias = pos) ?:
+            findMilitaryRepairTarget(10000,  bias = pos)
             if (toRepair != null) {
                 room.visual.circle(toRepair.pos, options { fill = "#00FFAA"; opacity=0.3; radius = 0.3 })
                 goRepair(toRepair)
                 return
             }
         }
+
+        if (room.name == memory.assignedRoom && room.memory.prospectorsUpgradeController) {
+            putEnergy(room.controller)
+            return
+        }
+
 
         if (memory.homeRoom == "")
             return

@@ -223,9 +223,9 @@ private fun houseKeeping(creeps: Record<String, Creep>) {
                 Memory.forceReassignDistributionCategories = true
 
             // If prospector, send report
-            if (Memory.creeps[creepName]?.role == Role.PROSPECTOR) {
+            /*if (Memory.creeps[creepName]?.role == Role.PROSPECTOR) {
                 Game.notify("${getSKTime()} Prospector $creepName died, made ${Memory.creeps[creepName]?.prospectedCount} trips")
-            }
+            }*/
 
             delete(Memory.creeps[creepName])
         }

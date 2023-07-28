@@ -144,7 +144,7 @@ fun Room.placeExtensionSites(count: Int) {
 }
 
 fun recordImportExport(from: String, to: String, amount: Int)  {
-    if (Game.rooms[from]!!.memory.energyGraphData.isNotEmpty()) {
+    if (Game.rooms[from] != null && Game.rooms[from]!!.memory.energyGraphData.isNotEmpty()) {
         val room = Game.rooms[from]!!
         val lastPoint = room.memory.energyGraphData[room.memory.energyGraphData.size - 1]
         room.memory.energyGraphData[room.memory.energyGraphData.size - 1] =
@@ -157,7 +157,7 @@ fun recordImportExport(from: String, to: String, amount: Int)  {
                 lastPoint.exports + amount,
             )
     }
-    if (Game.rooms[to]!!.memory.energyGraphData.isNotEmpty()) {
+    if (Game.rooms[to] != null && Game.rooms[to]!!.memory.energyGraphData.isNotEmpty()) {
         val room = Game.rooms[to]!!
         val lastPoint = room.memory.energyGraphData[room.memory.energyGraphData.size - 1]
         room.memory.energyGraphData[room.memory.energyGraphData.size - 1] =

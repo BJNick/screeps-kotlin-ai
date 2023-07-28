@@ -73,6 +73,8 @@ var RoomMemory.distributionAssignments: Array<String> by memory { arrayOf() }
 
 var RoomMemory.graphOnTopSide: Boolean by memory { false }
 
+var RoomMemory.prospectorsUpgradeController: Boolean by memory { false }
+
 // GLOBAL memory
 
 var Memory.forceReassignSources: Boolean by memory { false }
