@@ -1,9 +1,9 @@
 package bjnick
 
+import assignedRoom
 import role
 import screeps.api.*
 import screeps.api.structures.Structure
-import screeps.api.structures.StructureContainer
 import kotlin.math.min
 
 // Define filter lambda type
@@ -28,6 +28,11 @@ fun <T: Attackable> lessHitsThan(hits: Int): Filter<T> = { structure: T -> struc
 fun hasRole(vararg role: String): Filter<Creep> = { creep -> creep.memory.role in role }
 
 fun hasBodyPart(vararg parts: BodyPartConstant): Filter<Creep> = { creep -> creep.body.any { it.type in parts } }
+
+fun ticksToLiveOver(ticks: Int): Filter<Creep> = { creep -> creep.ticksToLive > ticks }
+
+fun hasAssignedRoom(room: String): Filter<Creep> = { creep -> creep.memory.assignedRoom == room }
+
 
 fun onOppositeSideOf(pivot: RoomPosition, side: RoomPosition): Filter<HasPosition> = { o ->
     (if (pivot.x < side.x) pivot.x > o.pos.x else pivot.x < o.pos.x && pivot.x != side.x) or
@@ -146,6 +151,8 @@ fun Room.byOrder(structureConstant: StructureConstant, f: Filter<Structure> = { 
 fun <T> Array<T>.byOrder(f: Filter<T> = { _: T -> true } ): dynamic {
     return this.firstOrNull(f)
 }
+
+fun Game.creepCount(f: Filter<Creep> = { _: Creep -> true }): Int = this.creeps.values.count(f)
 
 
 /**

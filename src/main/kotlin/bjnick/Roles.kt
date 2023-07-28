@@ -133,11 +133,12 @@ fun Creep.harvester() {
     if (isCollecting()) {
         if (store.getFreeCapacity() > 0)
             collectFromASource()
-        if (container != null && container.hits >= 35000 && store.getUsedCapacity() > 40) {
+        if (container != null && container.hits >= 35000 && store.getUsedCapacity() >= 40 &&
+                container.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
             this.transfer(container, RESOURCE_ENERGY)
         }
     } else {
-        if (container != null) {
+        if (container != null && container.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
             if (container.hits < 35000) {
                 goRepair(container)
             } else {
@@ -187,15 +188,22 @@ fun Creep.builder() {
 }
 
 fun Creep.upgrader() {
+    val container = findBufferContainer()
     if (isCollecting()) {
-        if (!useDistributionSystem(room))
+        if (container != null && store.getUsedCapacity() < 10 && container.store[RESOURCE_ENERGY] > 0) {
+            if (container.pos.inRangeTo(pos, 1)) {
+                this.withdraw(container, RESOURCE_ENERGY)
+            } else {
+                collectFrom(container)
+                return
+            }
+        } else if (!useDistributionSystem(room))
             collectFrom(findConvenientEnergy())
         else {
             if (store.getUsedCapacity() > 0)
                 memory.collecting = false // keep upgrading even if not full
         }
     } else {
-        val container = findBufferContainer()
         if (container != null && store.getUsedCapacity() < 10 && container.store[RESOURCE_ENERGY] > 0) {
             if (container.pos.inRangeTo(pos, 1)) {
                 this.withdraw(container, RESOURCE_ENERGY)
@@ -463,9 +471,9 @@ fun Creep.outer_harvester() {
     // For settling in nearby rooms
     if (isCollecting() && gotoAssignedRoom()) return
 
-    if (Game.time % 4 == name.hashCode() % 4)
+    /*if (Game.time % 4 == name.hashCode() % 4)
         say(arrayOf(">:(", "No attac", "We mine").random(), true) // TODO: Tell other players
-
+*/
     if (store.getUsedCapacity(RESOURCE_ENERGY) > 0 && room.controller!!.ticksToDowngrade < 9500 && pos.getRangeTo(room.controller!!) < 5) {
         putEnergy(room.controller)
         return
@@ -477,7 +485,7 @@ fun Creep.outer_harvester() {
     val containerVal = container?.store?.getUsedCapacity(RESOURCE_ENERGY) ?: 0
 
     // SUPPLY TOWER
-    val closestTower = room.bySort(STRUCTURE_TOWER, f = hasAtMostEnergy(800) and withinRange(2,pos),
+    val closestTower = room.bySort(STRUCTURE_TOWER, f = hasAtMostEnergy(999) and withinRange(2,pos),
         sort = byDistance(pos))?.unsafeCast<StructureTower>()
     if ((store.getUsedCapacity(RESOURCE_ENERGY) >= 40 || sourceVal == 0) && closestTower != null) {
         if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {

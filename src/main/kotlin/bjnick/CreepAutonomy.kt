@@ -213,7 +213,7 @@ fun Creep.putEnergy(target: HasPosition?) {
             return logError("putEnergy: target $target is of unsupported structure type")
     }
 
-    moveIfNotInRange(target, err, "putEnergy")
+    moveIfNotInRange(target, err, "putEnergy into $target")
 }
 
 fun Creep.goRepair(target: Structure?): Boolean {
@@ -555,10 +555,10 @@ fun Creep.gotoHomeRoom(): Boolean {
 
 fun Creep.loadAssignedRoomAndHome(): Boolean {
     memory.homeRoom = Memory.homeRoom
-    memory.assignedRoom = Memory.settlementRoom
-    if (memory.homeRoom == "" || memory.assignedRoom == "") {
-        console.log("$name: No home/assigned room")
-        return false
+    //memory.assignedRoom = Memory.settlementRoom
+    if (memory.assignedRoom == "") {
+        console.log("$name: No assigned room")
+        //return false
     }
     return true
 }

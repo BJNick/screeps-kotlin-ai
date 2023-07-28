@@ -67,17 +67,18 @@ fun Room.visualizeSources(): Unit {
         val assigned = it.getAssignedHarvesterArray().size
         val textColor = if (optimal == assigned) "#00FF00" else if (optimal < assigned) "#FFFF00" else "#AAAAAA"
         val offset = if (it.room.getTerrain().get(it.pos.x,it.pos.y+1) == TERRAIN_MASK_NONE) -0.6 else 0.6+0.45
+        val toTheLeft = if (it.room.getTerrain().get(it.pos.x-1,it.pos.y) == TERRAIN_MASK_NONE) 1 else -1
         this.visual.text("$assigned/$optimal", it.pos.x.toDouble(), it.pos.y.toDouble()+offset, options { color = textColor })
         // Also display # of energy left
         val energyLeft = it.energy
         val textColor2 = if (energyLeft > 300) "#AAAAAA" else "#FFAAAA"
-        this.visual.text("$energyLeft", it.pos.x.toDouble()-1, it.pos.y.toDouble(), options { color = textColor2; font = "0.5" })
+        this.visual.text("$energyLeft", it.pos.x.toDouble()+toTheLeft, it.pos.y.toDouble(), options { color = textColor2; font = "0.5" })
         // Also display amount in close container
         val containers = it.pos.findInRange(FIND_STRUCTURES, 1, options { filter = { it.structureType == STRUCTURE_CONTAINER } })
         if (containers.isNotEmpty()) {
             val container = containers.first() as StructureContainer
             val textColor3 = if (container.store[RESOURCE_ENERGY] > 300) "#FFFFAA" else "#FFAAAA"
-            this.visual.text("${container.store[RESOURCE_ENERGY]}", it.pos.x.toDouble()-1, it.pos.y.toDouble()+0.5, options { color = textColor3; font = "0.5" })
+            this.visual.text("${container.store[RESOURCE_ENERGY]}", it.pos.x.toDouble()+toTheLeft, it.pos.y.toDouble()+0.5, options { color = textColor3; font = "0.5" })
         }
 
     }

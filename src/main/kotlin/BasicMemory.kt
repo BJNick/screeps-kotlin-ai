@@ -85,6 +85,7 @@ var Memory.prospectingRooms: Array<String> by memory { arrayOf() }
 
 var Memory.homeRoom: String by memory { "" }
 var Memory.settlementRoom: String by memory { "" }
+var Memory.settlementRoom2: String by memory { "" }
 
 var Memory.defendRoom: String by memory { "" }
 
