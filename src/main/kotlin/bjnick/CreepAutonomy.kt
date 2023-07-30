@@ -37,11 +37,11 @@ import kotlin.random.Random
 fun logError(message: Any?) : Unit = console.log(message)
 
 fun Creep.isCollecting(): Boolean {
-    if (memory.collectingFlag == FLAG_COLLECTING || !memory.collecting && store[RESOURCE_ENERGY] == 0) {
+    if (!memory.collecting && (memory.collectingFlag == FLAG_COLLECTING || store[RESOURCE_ENERGY] == 0)) {
         memory.collecting = true
         say("⛏ collect")
     }
-    if (memory.collectingFlag == FLAG_DISTRIBUTING || memory.collecting && store[RESOURCE_ENERGY] == store.getCapacity()) {
+    if (memory.collecting && (memory.collectingFlag == FLAG_DISTRIBUTING || store[RESOURCE_ENERGY] == store.getCapacity())) {
         memory.collecting = false
         say("⚡ put away")
     }
@@ -492,6 +492,11 @@ fun Creep.clearTarget() {
 }
 
 fun Creep.executeCachedTask(): Boolean {
+    // Reset task from time to time
+    if (Game.time % 10 == name.hashCode() % 10) {
+        clearTarget()
+        return false
+    }
     return when (memory.targetTask) {
         "moveWithin" -> {
             val targetPos = absToPos(memory.targetPos)
@@ -556,10 +561,10 @@ fun Creep.gotoHomeRoom(): Boolean {
 fun Creep.loadAssignedRoomAndHome(): Boolean {
     memory.homeRoom = Memory.homeRoom
     //memory.assignedRoom = Memory.settlementRoom
-    if (memory.assignedRoom == "") {
+    /*if (memory.assignedRoom == "") {
         console.log("$name: No assigned room")
         //return false
-    }
+    }*/
     return true
 }
 
@@ -584,14 +589,14 @@ fun bindCoordinate(v: Int): Int {
 }
 
 fun Creep.fastTransfer(target: StoreOwner, resource: ResourceConstant, reverse: Boolean = false): ScreepsReturnCode {
-    return transfer(target, resource)
     // Try to transfer all energy to target
-    /*val usedCapacity = store.getUsedCapacity(resource)
+    val usedCapacity = store.getUsedCapacity(resource)
     val targetFreeCapacity = target.store.getFreeCapacity(resource)
     val code = transfer(target, resource)
     if (code == OK && usedCapacity <= targetFreeCapacity) {
         // We just emptied our store
         memory.collectingFlag = FLAG_COLLECTING
+        clearTarget()
         say("\uD83D\uDD04 collect")
         // Rerun the creep to find a new target
         //if (!reverse) this.executeRole()
@@ -600,12 +605,13 @@ fun Creep.fastTransfer(target: StoreOwner, resource: ResourceConstant, reverse: 
         // We just filled up target
         if (target is Creep) {
             target.memory.collectingFlag = FLAG_DISTRIBUTING
-            say("\uD83D\uDD04 distribute")
+            target.clearTarget()
+            target.say("\uD83D\uDD04 distribute")
             // DO NOT EXECUTE, WE DON'T KNOW IF IT ALREADY DID AN ACTION
             //if (reverse) target.executeRole()
         }
     }
-    return code*/
+    return code
 }
 
 

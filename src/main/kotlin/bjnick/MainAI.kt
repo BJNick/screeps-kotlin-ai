@@ -48,7 +48,12 @@ fun gameLoop() {
 
     for ((_, creep) in Game.creeps) {
         val before = Game.cpu.getUsed()
-        creep.executeRole()
+        try {
+            creep.executeRole()
+        } catch (e: dynamic) {
+            console.log("Error in creep ${creep.name} with role ${creep.memory.role}: ${e.message}\n${e.stack}")
+            continue
+        }
         // MEASURE PERFORMANCE
         if (Memory.visualizeCPUUsage || Memory.outputCPUUsage) {
             val after = Game.cpu.getUsed()
@@ -144,7 +149,7 @@ fun gameLoop() {
         }
             .sortedBy { it.memory.role }
             .forEachIndexed { index, it ->
-                mainSpawn.room.showProspectorInfo(it, prospectorX, prospectorY + index * 2)
+                mainSpawn.room.showProspectorInfo(it, prospectorX, prospectorY + index * 1)
             }
 
 
@@ -201,9 +206,9 @@ fun Room.showProspectorInfo(creep: Creep?, x: Double, y: Double) {
     val prospectorDistance = 80 - creep.pos.x - if (creep.room == this) 50 else 0//creep.pos.getRangeTo(this.find(FIND_MY_SPAWNS)[0])
     this.visual.text("${creep.memory.role.lowercase().capitalize()} $prospectorName", x, y,
         options { color = creepColor; align = TEXT_ALIGN_LEFT; font = "0.5"; opacity = 0.7 })
-    this.visual.text("$prospectorInventory, d$prospectorDistance", x, y + 0.75,
-        options { color = creepColor; align = TEXT_ALIGN_LEFT; font = "0.5"; opacity = 0.7 })
-    val lastTripDuration = creep.memory.lastTripDuration
+    /*this.visual.text("$prospectorInventory, d$prospectorDistance", x, y + 0.75,
+        options { color = creepColor; align = TEXT_ALIGN_LEFT; font = "0.5"; opacity = 0.7 })*/
+    //val lastTripDuration = creep.memory.lastTripDuration
     /*this.visual.text("${creep.memory.prospectedCount}T, time: $lastTripDuration", x, y + 1.5,
         options { color = "#AAAAAA"; align = TEXT_ALIGN_LEFT; font = "0.5" })*/
 }

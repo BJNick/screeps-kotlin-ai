@@ -22,11 +22,12 @@ enum class DistributionCategory {
 
 // Desired counts
 fun desiredCountOf(category: DistributionCategory): Int = when (category) {
+    UNASSIGNED -> 0
     SPAWN -> 1
     CONTROLLER -> 2
     BUILDERS -> 1
     TOWERS -> 1
-    STORAGE -> 1 // UNUSED FOR NOW
+    STORAGE -> 0 // UNUSED FOR NOW
     else -> 0
 }
 
@@ -39,7 +40,14 @@ fun actualCountOf(category: DistributionCategory, room: Room): Int {
 
 
 fun catToInt(category: DistributionCategory): Int = category.ordinal
-fun intToCat(i: Int): DistributionCategory = DistributionCategory.values()[i]
+fun intToCat(i: Int): DistributionCategory {
+    return if (i < catCount())
+        DistributionCategory.values()[i]
+    else {
+        console.log("ERROR: intToCat($i)");
+        UNASSIGNED
+    }
+}
 fun catCount(): Int = DistributionCategory.values().size
 
 
@@ -47,7 +55,7 @@ fun catCount(): Int = DistributionCategory.values().size
 fun pickDistributionCategory(creep: Creep, room: Room) {
     initializeRoomDistribution(room)
     unassignDistribution(creep.name, room)
-    for (i in 1..catCount()) {
+    for (i in 1 until catCount()) {
         if (desiredCountOf(intToCat(i)) > actualCountOf(intToCat(i), room)) {
             assignDistribution(creep, room, intToCat(i))
             return
@@ -79,13 +87,15 @@ fun unassignDistribution(creepName: String, room: Room) {
 
 fun useDistributionSystem(room: Room): Boolean {
     // If there are 5 or more carriers, use the distribution system
-    return room.find(FIND_MY_CREEPS, options { filter = { it.memory.role == Role.CARRIER } }).size >= 5
+    return room.find(FIND_MY_CREEPS, options { filter = { it.memory.role == Role.CARRIER } }).size >= 4
 }
 
 fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
     var category = this.memory.distributionCategory
     //if (category == 0) pickDistributionCategory(this, room)
     //category = this.memory.distributionCategory
+    val constructionSitesPresent = room.find(FIND_MY_CONSTRUCTION_SITES).isNotEmpty()
+
     if (category == 0) category = name.hashCode() % (catCount()-1) + 1
     val duty = when (intToCat(category)) {
 
@@ -103,9 +113,8 @@ fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
         }
 
         BUILDERS -> // Supply builder creeps
-            room.find(FIND_MY_CREEPS, options { filter = { it.memory.role == Role.BUILDER &&
-                    it.store.getFreeCapacity() > 0 } })
-                .minByOrNull { it.store.getUsedCapacity() }
+            room.bySort(FIND_MY_CREEPS, f = hasRole(Role.BUILDER) and { hasFreeCapacity(it) || constructionSitesPresent },
+                sort = byDistance(this.pos) then byMostFree)
 
         TOWERS -> // Supply towers
             room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_TOWER &&

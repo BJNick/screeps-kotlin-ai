@@ -82,9 +82,12 @@ fun Creep.pathColor() = when (memory.role) {
 
 
 fun Creep.carrier() {
+    if (useDistributionSystem(room))
+        if (memory.distributionCategory == 0) // FORCE ASSIGNMENT
+            pickDistributionCategory(this, room)
     if (useDistributionSystem(room)) // DEBUG
         room.visual.text("${intToCat(memory.distributionCategory)}"
-            .take(1), pos.x+0.0, pos.y+1.0, options { color = "#66FF66"; font = "0.5"; opacity = 0.5 })
+            .take(2), pos.x+0.0, pos.y+1.0, options { color = "#66FF66"; font = "0.5"; opacity = 0.5 })
 
     if (executeCachedTask()) return // TODO TESTING
 
@@ -102,7 +105,7 @@ fun Creep.carrier() {
         // ALWAYS PICK THE CLOSEST
         // TODO Encapsulate distribution behaviour
         if (memory.distributionCategory == catToInt(DistributionCategory.STORAGE)) {
-            val target = room.byOrder(STRUCTURE_STORAGE, f = hasAtLeastEnergy(1950) )
+            val target = room.byOrder(STRUCTURE_CONTAINER, f = hasAtLeastEnergy(1950) )
             if (target != null) {
                 collectFrom(target)
                 return
@@ -117,14 +120,18 @@ fun Creep.carrier() {
             memory.collecting = false // keep distributing even if not full
         }
     } else {
+        if (useDistributionSystem(room))
+            putEnergy(findTargetByCategory())
+        else
+            putEnergy(findEnergyTarget(room))
         // TODO: MILITARY MEASURES ONLY
-        if (useDistributionSystem(room) && Game.creeps.values.count { it.memory.role == Role.RANGER } >= 1) {
+        /*if (useDistributionSystem(room) && Game.creeps.values.count { it.memory.role == Role.RANGER } >= 1) {
             if (memory.distributionCategory == 0)
-                pickDistributionCategory(this, room)
+                pickDistributionCategory(this, room) // WHAT DOES THIS DO??
             putEnergy(findTargetByCategory())
         } else {
             putEnergy(findEnergyTarget(room))
-        }
+        }*/
     }
 }
 
@@ -154,14 +161,14 @@ fun Creep.harvester() {
 fun Creep.builder() {
     if (executeCachedTask()) return // TODO TESTING
 
-    if (room.energyAvailable < room.energyCapacityAvailable &&
+    /*if (room.energyAvailable < room.energyCapacityAvailable &&
         room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_CONTAINER } } )
             .sumOf { it.unsafeCast<StoreOwner>().store[RESOURCE_ENERGY] ?: 0 } < 500) {
         // Wait until more energy is available
         if (store.getUsedCapacity() > 0)
             putEnergy(getVacantSpawnOrExt(room))
         return
-    }
+    }*/
 
     if (isCollecting()) {
         //if (!ProgressState.carriersPresent)
@@ -217,6 +224,8 @@ fun Creep.upgrader() {
 }
 
 fun Creep.repairer() {
+    if (executeCachedTask()) return // TODO TESTING
+
     if (isCollecting()) {
         //if (!ProgressState.carriersPresent
         collectFrom(findConvenientEnergy())
@@ -568,7 +577,7 @@ fun Creep.caravan() {
         }
 
         val destination = findCaravanPickupEnergy(bias = cornerBias())
-        if (room.getTotalContainerEnergy() < this.store.getCapacity()!!*2) {
+        if (room.getTotalContainerEnergy() < this.store.getCapacity()!!*1.5) {
             // Wait for it to fill up, close to the source
             if (Game.time % 4 == name.hashCode() % 4)
                 say("Waiting")

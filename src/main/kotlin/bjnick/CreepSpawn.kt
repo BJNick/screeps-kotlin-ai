@@ -231,7 +231,7 @@ fun spawnCreeps(
 
         creeps.count { it.memory.role == Role.UPGRADER } < 2 -> SpawnRequest(Role.UPGRADER, bestWorker(capacity))
 
-        creeps.count { it.memory.role == Role.BUILDER } < 2 -> SpawnRequest(Role.BUILDER, optimizedBuilder(capacity))  // reduced from 3
+        creeps.count { it.memory.role == Role.BUILDER } < 2 -> SpawnRequest(Role.BUILDER, mixedFastWorker(capacity))  // changed design
 
         creeps.count { it.memory.role == Role.REPAIRER } < 1 -> SpawnRequest(Role.REPAIRER, bestOffRoadWorker(capacity))
 
@@ -241,7 +241,7 @@ fun spawnCreeps(
         // creeps.count { it.memory.role == Role.PROSPECTOR } < 1 -> SpawnRequest(Role.PROSPECTOR, bestOffRoadWorker(capacity))
 
         spawn.room.find(FIND_CONSTRUCTION_SITES).isNotEmpty() &&
-               creeps.count { it.memory.role == Role.BUILDER } < 2 -> SpawnRequest(Role.BUILDER, bestWorker(capacity))
+               creeps.count { it.memory.role == Role.BUILDER } < 2 -> SpawnRequest(Role.BUILDER, mixedFastWorker(capacity))
 
 
         //creeps.count { it.memory.role == Role.REPAIRER } < 2 -> SpawnRequest(Role.REPAIRER, bestOffRoadWorker(capacity))
@@ -287,9 +287,11 @@ fun spawnCreeps(
         count(Role.SETTLER, 0, roomB) < 2 ->
             SpawnRequest(Role.SETTLER, bestOffRoadWorker(capacity)) { it.assignedRoom = roomB }
 
-        count(Role.CARAVAN, 0, roomB) < 1 ->
+        count(Role.CARAVAN, 0, roomB) < 2 ->
             SpawnRequest(Role.CARAVAN, bestOnRoad(UNLIMITED, 1000)) { it.assignedRoom = roomB }
 
+
+        creeps.count { it.memory.role == Role.UPGRADER } < 4 -> SpawnRequest(Role.UPGRADER, bestWorker(capacity))
 
         else -> return
     }
