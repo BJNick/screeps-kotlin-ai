@@ -9,6 +9,7 @@ import lastTripDuration
 import org.w3c.dom.Text
 import outputCPUUsage
 import prospectedCount
+import recordData
 import role
 import screeps.api.*
 import screeps.api.structures.StructureSpawn
@@ -21,6 +22,7 @@ import visualizeGraphs
 import visualizeRepairs
 import kotlin.js.Date
 
+
 class ProgressState {
     companion object Factory {
         val carriersPresent: Boolean
@@ -29,6 +31,7 @@ class ProgressState {
 }
 
 fun gameLoop() {
+
     val mainSpawn: StructureSpawn = Game.spawns.values.firstOrNull() ?: return
 
     Game.rooms.values.forEach {
@@ -45,12 +48,13 @@ fun gameLoop() {
 
     //make sure we have at least some creeps
     spawnCreeps(Game.creeps.values, mainSpawn)
-    if (mainSpawn.spawning != null) {
+    // TODO DOES NOT WORK
+    /*if (mainSpawn.spawning != null) {
         // SECONDARY SPAWN
         val spawn = Game.spawns.values.firstOrNull { it.spawning == null }
         if (spawn != null)
             spawnCreeps(Game.creeps.values, spawn)
-    }
+    }*/
 
     val cpuUsage: MutableList<String> = mutableListOf()
 
@@ -184,7 +188,8 @@ fun gameLoop() {
     // Show graph for reach owned room
     Game.rooms.values.forEach {
         val y = if (it.memory.graphOnTopSide) 10.0 else 48.0
-        recordGraph(it, 15, 15.0, y, showVis = Memory.visualizeGraphs && Memory.enableVisualizations && !saveCPU)
+        if (Memory.recordData)
+            recordGraph(it, 15, 15.0, y, showVis = Memory.visualizeGraphs && Memory.enableVisualizations && !saveCPU)
     }
 
     // Show CPU usage

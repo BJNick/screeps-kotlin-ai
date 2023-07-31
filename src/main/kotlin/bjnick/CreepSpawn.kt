@@ -17,6 +17,7 @@ val BASIC_CREEP: bodyArray = arrayOf(WORK, CARRY, MOVE)
 val BASIC_WORKER: bodyArray = arrayOf(WORK, WORK, CARRY, MOVE)
 val BASIC_OFF_ROAD: bodyArray = arrayOf(MOVE, CARRY, MOVE, CARRY, MOVE, MOVE)
 val BASIC_CARRIER: bodyArray = arrayOf(CARRY, MOVE, CARRY, MOVE, CARRY, MOVE)
+val BASIC_CARRIER_ROAD: bodyArray = arrayOf(MOVE, CARRY, CARRY, MOVE, CARRY, CARRY)
 
 fun bestWorker(maxEnergy: Int): bodyArray {
     if (maxEnergy < 200) return BASIC_CREEP
@@ -235,11 +236,13 @@ fun spawnCreeps(
 
         creeps.count { it.memory.role == Role.UPGRADER } < 2 -> SpawnRequest(Role.UPGRADER, bestWorker(capacity))
 
-        creeps.count { it.memory.role == Role.BUILDER } < 2 -> SpawnRequest(Role.BUILDER, mixedFastWorker(capacity))  // changed design
+        // reduced to save cpu
+        creeps.count { it.memory.role == Role.BUILDER } < 1 -> SpawnRequest(Role.BUILDER, mixedFastWorker(capacity))  // changed design
 
-        creeps.count { it.memory.role == Role.REPAIRER } < 1 -> SpawnRequest(Role.REPAIRER, bestOffRoadWorker(capacity))
+        // reduced to save cpu
+        //creeps.count { it.memory.role == Role.REPAIRER } < 1 -> SpawnRequest(Role.REPAIRER, bestOffRoadWorker(capacity))
 
-        creeps.count { it.memory.role == Role.ERRANDER } < 3 -> SpawnRequest(Role.ERRANDER, BASIC_CARRIER)
+        creeps.count { it.memory.role == Role.ERRANDER } < 3 -> SpawnRequest(Role.ERRANDER, BASIC_CARRIER_ROAD)
 
         // OFF WHILE SETTLING
         // creeps.count { it.memory.role == Role.PROSPECTOR } < 1 -> SpawnRequest(Role.PROSPECTOR, bestOffRoadWorker(capacity))
@@ -298,7 +301,9 @@ fun spawnCreeps(
         creeps.count { it.memory.role == Role.UPGRADER } < 4 -> SpawnRequest(Role.UPGRADER, bestWorker(capacity))
 
         /// MINERAL AND MARKET
-        count(Role.EXTRACTOR, 100) < 1 -> SpawnRequest(Role.EXTRACTOR, bestWorker(capacity))
+        count(Role.EXTRACTOR, 0) < 1 -> SpawnRequest(Role.EXTRACTOR, bestWorker(capacity))
+
+        count(Role.TRADER, 0) < 1 -> SpawnRequest(Role.TRADER, BASIC_CARRIER_ROAD)
 
         else -> return
     }

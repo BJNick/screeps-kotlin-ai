@@ -32,6 +32,7 @@ object Role {
     val ERRANDER = "ERRANDER"
     val BOUNCER = "BOUNCER"
     val EXTRACTOR = "EXTRACTOR"
+    val TRADER = "TRADER"
 }
 
 fun Creep.executeRole() {
@@ -55,6 +56,8 @@ fun Creep.executeRole() {
         Role.ERRANDER -> errander()
         Role.BOUNCER -> bouncer()
         Role.EXTRACTOR -> extractor()
+        Role.TRADER -> trader()
+        else -> console.log("Unknown role: $name")
     }
 }
 
@@ -73,6 +76,7 @@ fun Creep.pathColor() = when (memory.role) {
     Role.ERRANDER -> "#AAFF00"
     Role.BOUNCER -> "#FF0000"
     Role.EXTRACTOR -> "#FFFFFF"
+    Role.TRADER -> "#FFFFFF"
     else -> "#FFFFFF"
 }
 
@@ -96,14 +100,14 @@ fun Creep.carrier() {
     if (isCollecting()) {
         val dropped = findDroppedEnergy(room)
         if (dropped != null) {
-            collectFrom(dropped)
+            collectEnergyFrom(dropped)
             return
         }
 
         // Mineral container that accidentally has energy in it
         val mineralContainer = room.byOrder(STRUCTURE_CONTAINER, f = hasAtLeastEnergy(1) and hasTag(MINERAL_BUFFER))
         if (mineralContainer != null) {
-            collectFrom(mineralContainer)
+            collectEnergyFrom(mineralContainer)
             return
         }
 
@@ -115,7 +119,7 @@ fun Creep.carrier() {
         if (memory.distributionCategory == catToInt(DistributionCategory.STORAGE)) {
             val target = room.byOrder(STRUCTURE_CONTAINER, f = hasAtLeastEnergy(1950) )
             if (target != null) {
-                collectFrom(target)
+                collectEnergyFrom(target)
                 return
             }
         }
@@ -123,7 +127,7 @@ fun Creep.carrier() {
         val target = findConvenientEnergy()
         //}
         if (target != null) {
-            collectFrom(target)
+            collectEnergyFrom(target)
         } else if (store.getUsedCapacity() > 0) {
             memory.collecting = false // keep distributing even if not full
         }
@@ -192,7 +196,7 @@ fun Creep.builder() {
 
     if (isCollecting()) {
         //if (!ProgressState.carriersPresent)
-        collectFrom(findConvenientEnergy())
+        collectEnergyFrom(findConvenientEnergy())
     } else {
         val site = getConstructionSite(room)
 
@@ -224,11 +228,11 @@ fun Creep.upgrader() {
             if (container.pos.inRangeTo(pos, 1)) {
                 this.withdraw(container, RESOURCE_ENERGY)
             } else {
-                collectFrom(container)
+                collectEnergyFrom(container)
                 return
             }
         } else if (!useDistributionSystem(room))
-            collectFrom(findConvenientEnergy())
+            collectEnergyFrom(findConvenientEnergy())
         else {
             if (store.getUsedCapacity() > 0)
                 memory.collecting = false // keep upgrading even if not full
@@ -238,7 +242,7 @@ fun Creep.upgrader() {
             if (container.pos.inRangeTo(pos, 1)) {
                 this.withdraw(container, RESOURCE_ENERGY)
             } else {
-                collectFrom(container)
+                collectEnergyFrom(container)
                 return
             }
         }
@@ -254,7 +258,7 @@ fun Creep.repairer() {
 
     if (isCollecting()) {
         //if (!ProgressState.carriersPresent
-        collectFrom(findConvenientEnergy())
+        collectEnergyFrom(findConvenientEnergy())
     } else {
         // OBSOLETE target locking
         /*if (getTarget() != null) {
@@ -319,7 +323,7 @@ fun Creep.prospector() {
 
         val dropped = findDroppedEnergy(room)
         if (dropped != null) {
-            collectFrom(dropped)
+            collectEnergyFrom(dropped)
             return
         }
 
@@ -329,7 +333,7 @@ fun Creep.prospector() {
             memory.assignedSource = Memory.prospectingTargets.randomOrNull() ?: ""
             return
         }
-        collectFrom(assignedSource)
+        collectEnergyFrom(assignedSource)
     } else {
         if (room.controller!!.ticksToDowngrade < 9000 || room.controller!!.level == 1) {
             // And also its the closest creep to the controller
@@ -416,14 +420,14 @@ fun Creep.settler() {
 
         val dropped = findDroppedEnergy(room)
         if (dropped != null) {
-            collectFrom(dropped)
+            collectEnergyFrom(dropped)
             return
         }
 
         if (findFullestContainer() != null) {
             if (memory.assignedSource == "")
                 unassignSource(name)
-            collectFrom(findConvenientEnergy()) // TODO Bias
+            collectEnergyFrom(findConvenientEnergy()) // TODO Bias
         } else {
             collectFromASource()
         }
@@ -524,7 +528,7 @@ fun Creep.outer_harvester() {
         sort = byDistance(pos))?.unsafeCast<StructureTower>()
     if ((store.getUsedCapacity(RESOURCE_ENERGY) >= 40 || sourceVal == 0) && closestTower != null) {
         if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
-            collectFrom(container)
+            collectEnergyFrom(container)
             return
         }
         if (pos.getRangeTo(closestTower) > 1) {
@@ -540,7 +544,7 @@ fun Creep.outer_harvester() {
         val closestConstructionSite = getConstructionSite(room)
         if (closestConstructionSite != null && closestConstructionSite.pos.getRangeTo(pos) < 10) {
             if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
-                collectFrom(container)
+                collectEnergyFrom(container)
                 return
             }
             putEnergy(closestConstructionSite)
@@ -552,10 +556,10 @@ fun Creep.outer_harvester() {
     if ((sourceVal == 0 || containerVal == 2000) && pos.getRangeTo(room.controller!!) < 5) {
         if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
             if (sourceVal == 0) {
-                collectFrom(container)
+                collectEnergyFrom(container)
                 return
             } else {
-                collectFrom(source)
+                collectEnergyFrom(source)
                 return
             }
         }
@@ -569,7 +573,7 @@ fun Creep.outer_harvester() {
                 and withinRange(10, pos), sort = byDistance(pos))
         if (toRepair != null) {
             if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
-                collectFrom(container)
+                collectEnergyFrom(container)
                 return
             }
             goRepair(toRepair)
@@ -598,7 +602,7 @@ fun Creep.caravan() {
 
         val dropped = findDroppedEnergy(room)
         if (dropped != null && dropped.pos.getRangeTo(this) < 5) {
-            collectFrom(dropped)
+            collectEnergyFrom(dropped)
             return
         }
 
@@ -612,7 +616,7 @@ fun Creep.caravan() {
                 moveWithin(destination!!.pos, 2)
             return
         }
-        collectFrom(destination)
+        collectEnergyFrom(destination)
     } else {
         if (gotoGlobalHomeRoom()) return
         putEnergy(findConvenientContainer(avoidTags = arrayOf(MINERAL_BUFFER)))
@@ -724,14 +728,14 @@ fun Creep.errander() {
     if (isCollecting()) {
         val dropped = findDroppedEnergy(room)
         if (dropped != null) {
-            collectFrom(dropped)
+            collectEnergyFrom(dropped)
             return
         }
 
         val target = findConvenientEnergy(takeFromCarriers = 2)
 
         if (target != null) {
-            collectFrom(target)
+            collectEnergyFrom(target)
         } else if (store.getUsedCapacity() > 0) {
             memory.collecting = false // keep distributing even if not full
         }
@@ -912,4 +916,79 @@ fun Creep.extractor() {
             }
         }
     }
+}
+
+
+fun Creep.trader() {
+    if (stepAwayFromBorder()) return
+    if (gotoGlobalHomeRoom()) return // Home room only role
+
+    val terminal = room.terminal
+    if (terminal == null) {
+        console.log("Creep $name has no terminal to trade with")
+        return
+    }
+
+    // If terminal needs primary commodity, get it and put it in terminal
+
+    val primaryCommodity = RESOURCE_UTRIUM
+    val toBeGathered = arrayOf(Pair(primaryCommodity, 500), Pair(RESOURCE_ENERGY, 500))
+
+    val boughtResource = RESOURCE_GHODIUM_HYDRIDE
+    if (store.getUsedCapacity(boughtResource) > 0) {
+        val lab = room.byOrder(STRUCTURE_LAB, f = hasSomeOf(boughtResource)) ?:
+            room.byOrder(STRUCTURE_LAB) // either existing lab or any lab TODO empty lab
+        if (lab != null) {
+            putResource(lab, boughtResource)
+            return
+        } else {
+            say("No lab!")
+        }
+    }
+
+    // Put energy into labs that have minerals but no energy
+    val lowLabs = room.byOrder(STRUCTURE_LAB, f = hasSomeOf(boughtResource) and
+            hasAtMostEnergy(500))
+    if (lowLabs != null) {
+        if (store.getUsedCapacity(RESOURCE_ENERGY) == 0) {
+            collectEnergyFrom(findConvenientEnergy())
+            return
+        }
+        putResource(lowLabs, RESOURCE_ENERGY)
+        return
+    }
+
+    for (p in toBeGathered) {
+        // Gathers first resource in list that is not in terminal
+        val type = p.first
+        val amount = p.second
+        if (terminal.store.getUsedCapacity(type) < amount || store.getUsedCapacity(type) > 0) {
+            if (store.getUsedCapacity() > 0) { // of any type
+                putResource(terminal, type)
+                return
+            } else {
+                if (type == RESOURCE_ENERGY) {
+                    collectEnergyFrom(findConvenientEnergy())
+                    return
+                }
+                val getFrom = room.byOrder(
+                    arrayOf(STRUCTURE_CONTAINER, STRUCTURE_STORAGE),
+                    f = hasSomeOf(type)
+                )
+                if (getFrom != null) {
+                    collectResourceFrom(getFrom, type)
+                    return
+                }
+            }
+        }
+    }
+
+    // Distribute resources from the terminal
+    if (terminal.store.getUsedCapacity(boughtResource) > 0 && store.getFreeCapacity() > 0) {
+        collectResourceFrom(terminal, boughtResource)
+        return
+    }
+
+
+
 }

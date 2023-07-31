@@ -103,6 +103,7 @@ var Memory.visualizeCPUUsage: Boolean by memory { false }
 
 var Memory.enableVisualizations: Boolean by memory { false }
 var Memory.visualizeGraphs: Boolean by memory { false }
+var Memory.recordData: Boolean by memory { true }
 
 class DataPoint(val sourceEnergy: Int = 0, val extensionEnergy: Int = 0, val containerEnergy: Int = 0, val time: Int = 0, val imports: Int = 0, val exports: Int = 0)
 

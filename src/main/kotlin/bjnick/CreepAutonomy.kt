@@ -106,7 +106,9 @@ fun Creep.collectFromASource(fromRoom: Room = this.room) {
 
 fun Creep.collectFromMineral(): MineralConstant {
     val mineral = room.find(FIND_MINERALS)[0]
-    moveIfNotInRange(mineral, harvest(mineral), "collectFromMineral")
+    val err = harvest(mineral)
+    if (err != ERR_TIRED)
+        moveIfNotInRange(mineral, err, "collectFromMineral")
     return mineral.mineralType
 }
 
@@ -170,7 +172,7 @@ fun Creep.collectFromClosest(fromRoom: Room = this.room) {
 }
 
 
-fun Creep.collectFrom(target: HasPosition?) {
+fun Creep.collectEnergyFrom(target: HasPosition?) {
     if (target == null) return
 
     @Suppress("UNCHECKED_CAST_TO_EXTERNAL_INTERFACE")
@@ -185,7 +187,25 @@ fun Creep.collectFrom(target: HasPosition?) {
             return logError("collectFrom: target $target is of unsupported type")
     }
 
-    moveIfNotInRange(target, err, "collectFrom")
+    moveIfNotInRange(target, err, "collectEnergyFrom")
+}
+
+fun Creep.collectResourceFrom(target: HasPosition?, resource: ResourceConstant) {
+    if (target == null) return
+
+    @Suppress("UNCHECKED_CAST_TO_EXTERNAL_INTERFACE")
+    val err = when (target) {
+
+        is Mineral -> harvest(target)
+        is Tombstone -> withdraw(target, resource)
+        is Creep -> target.fastTransfer(this, resource, reverse = true)
+        is Resource -> pickup(target)
+
+        else -> if (target as? StoreOwner != null)  withdraw(target, resource) else
+            return logError("collectFrom: target $target is of unsupported type")
+    }
+
+    moveIfNotInRange(target, err, "collectResourceFrom")
 }
 
 // TODO: Consider overloads for different types of structures
@@ -292,8 +312,8 @@ fun Creep.moveWithin(target: RoomPosition, dist: Int = 0): ScreepsReturnCode {
         return moveTo(target, options { visualizePathStyle = jsObject<RoomVisual.ShapeStyle>
                 { this.stroke = pathColor(); this.lineStyle = LINE_STYLE_DASHED };
             costCallback = ::costCallbackAvoidBorder;
-            range = dist;
-            reusePath = if (memory.preferredPathCache == 0) 5 else memory.preferredPathCache;
+            range = dist; // TODO: Adjust cache size
+            reusePath = if (memory.preferredPathCache == 0) 7 else memory.preferredPathCache;
             ignoreCreeps = nearBorder() || !hasCreepsNearby(1)  })
     } else {
         clearTarget()
