@@ -1,6 +1,5 @@
 package bjnick
 
-import AbstractPos
 import assignedRoom
 import assignedSource
 import collecting
@@ -9,7 +8,6 @@ import distributionCategory
 import homeRoom
 import lastTripDuration
 import lastTripStarted
-import preferredPathCache
 import prospectedCount
 import prospectingRooms
 import prospectingTargets
@@ -17,10 +15,6 @@ import prospectorsUpgradeController
 import role
 import screeps.api.*
 import screeps.api.structures.*
-import screeps.utils.memory.memory
-import targetID
-import targetPos
-import targetTask
 
 object Role {
     val UNASSIGNED = "UNASSIGNED"
@@ -37,6 +31,7 @@ object Role {
     val RANGER = "RANGER"
     val ERRANDER = "ERRANDER"
     val BOUNCER = "BOUNCER"
+    val EXTRACTOR = "EXTRACTOR"
 }
 
 fun Creep.executeRole() {
@@ -59,6 +54,7 @@ fun Creep.executeRole() {
         Role.RANGER -> ranger()
         Role.ERRANDER -> errander()
         Role.BOUNCER -> bouncer()
+        Role.EXTRACTOR -> extractor()
     }
 }
 
@@ -76,6 +72,7 @@ fun Creep.pathColor() = when (memory.role) {
     Role.RANGER -> "#FF00FF"
     Role.ERRANDER -> "#AAFF00"
     Role.BOUNCER -> "#FF0000"
+    Role.EXTRACTOR -> "#FFFFFF"
     else -> "#FFFFFF"
 }
 
@@ -99,6 +96,14 @@ fun Creep.carrier() {
             collectFrom(dropped)
             return
         }
+
+        // Mineral container that accidentally has energy in it
+        val mineralContainer = room.byOrder(STRUCTURE_CONTAINER, f = hasAtLeastEnergy(1) and hasTag(MINERAL_BUFFER))
+        if (mineralContainer != null) {
+            collectFrom(mineralContainer)
+            return
+        }
+
         /*val target = if (useDistributionSystem(room)) {
             findConvenientEnergy(room, pickupLocationBias())
         } else {*/
@@ -587,7 +592,7 @@ fun Creep.caravan() {
         collectFrom(destination)
     } else {
         if (gotoHomeRoom()) return
-        putEnergy(findConvenientContainer())
+        putEnergy(findConvenientContainer(avoidTags = arrayOf(MINERAL_BUFFER)))
     }
 }
 
@@ -753,7 +758,7 @@ fun Creep.errander() {
             val other = otherErranders.bySort(sort = byDistance(it.pos))?.unsafeCast<Creep>()
             if (other == null || other.pos.getRangeTo(it.pos) > 3) {
                 // No other erranders are close to this upgrader
-                val buffer = room.byOrder(STRUCTURE_CONTAINER, f = hasFreeCapacity and withinRange(3, room.controller!!.pos))
+                val buffer = room.byOrder(STRUCTURE_CONTAINER, f = hasNoEnergy and withinRange(3, room.controller!!.pos))
                     ?.unsafeCast<StructureContainer>()
                 if (buffer != null) {
                     putEnergy(buffer)
@@ -850,4 +855,32 @@ fun Creep.bouncer() {
     }
 
 
+}
+
+fun Creep.extractor() {
+    // Extracts minerals from a mineral deposit
+    // does not move to other rooms
+    val container = findBufferContainer()
+    if (isCollecting()) {
+        if (store.getFreeCapacity() > 0) {
+            collectFromMineral()
+        }
+        if (container != null && mineralInStore()!=null && store.getUsedCapacity() >= 40 &&
+            container.store.getFreeCapacity() > 0) {
+            this.transfer(container, mineralInStore()!!)
+        }
+    } else {
+        if (mineralInStore() == null) {
+            console.log("Creep $name has no mineral in store to put in container")
+            return
+        }
+        if (container != null && container.store.getFreeCapacity() > 0) {
+            putResource(container, mineralInStore()!!)
+        } else {
+            // Last resort: put in storage
+            if (room.storage != null) {
+                putResource(room.storage!!, mineralInStore()!!)
+            }
+        }
+    }
 }

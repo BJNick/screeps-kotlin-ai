@@ -18,7 +18,6 @@ import role
 import screeps.api.*
 import screeps.api.structures.*
 import screeps.utils.unsafe.jsObject
-import settlementRoom
 import targetID
 import targetPos
 import targetTask
@@ -37,11 +36,11 @@ import kotlin.random.Random
 fun logError(message: Any?) : Unit = console.log(message)
 
 fun Creep.isCollecting(): Boolean {
-    if (!memory.collecting && (memory.collectingFlag == FLAG_COLLECTING || store[RESOURCE_ENERGY] == 0)) {
+    if (!memory.collecting && (memory.collectingFlag == FLAG_COLLECTING || store.getUsedCapacity() == 0)) {
         memory.collecting = true
         say("⛏ collect")
     }
-    if (memory.collecting && (memory.collectingFlag == FLAG_DISTRIBUTING || store[RESOURCE_ENERGY] == store.getCapacity())) {
+    if (memory.collecting && (memory.collectingFlag == FLAG_DISTRIBUTING || store.getFreeCapacity() == 0)) {
         memory.collecting = false
         say("⚡ put away")
     }
@@ -105,6 +104,15 @@ fun Creep.collectFromASource(fromRoom: Room = this.room) {
     moveIfNotInRange(source, harvest(source), "collectFromASource")
 }
 
+fun Creep.collectFromMineral(): MineralConstant {
+    val mineral = room.find(FIND_MINERALS)[0]
+    moveIfNotInRange(mineral, harvest(mineral), "collectFromMineral")
+    return mineral.mineralType
+}
+
+fun Creep.mineralInStore(): MineralConstant? {
+    return store.keys.filter { it != RESOURCE_ENERGY }.firstOrNull()?.unsafeCast<MineralConstant>()
+}
 
 /**
  * Collect from the most full harvester
@@ -214,6 +222,20 @@ fun Creep.putEnergy(target: HasPosition?) {
     }
 
     moveIfNotInRange(target, err, "putEnergy into $target")
+}
+
+fun Creep.putResource(target: HasPosition?, type: ResourceConstant) {
+    if (target == null)
+        return
+
+    if (target !is Structure && target !is Creep)
+        return logError("putResource: target $target is not a Structure or Creep")
+
+    @Suppress("UNCHECKED_CAST_TO_EXTERNAL_INTERFACE")
+    val err = if (target as? StoreOwner != null) transfer(target, type)
+        else return logError("putResource: target $target is of unsupported structure type")
+
+    moveIfNotInRange(target, err, "putResource into $target")
 }
 
 fun Creep.goRepair(target: Structure?): Boolean {
@@ -339,7 +361,7 @@ val STORE_STRUCTURES = arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_T
 
 // TODO: Save this for use in all creeps
 fun Creep.getVacantSpawnOrExt(room: Room): StoreOwner? {
-    return room.bySort(arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION), f = hasFreeCapacity, sort = byDistance(pos))
+    return room.bySort(arrayOf(STRUCTURE_SPAWN, STRUCTURE_EXTENSION), f = hasNoEnergy, sort = byDistance(pos))
 }
 
 fun Creep.getVacantTower(room: Room, maxEnergy: Int): StoreOwner? {
@@ -433,12 +455,8 @@ fun Creep.findDroppedEnergy(room: Room): HasPosition? {
 }
 
 fun Creep.findBufferContainer(): StructureContainer? {
-    return room.find(
-        FIND_STRUCTURES,
-        options { filter = { it.structureType == STRUCTURE_CONTAINER && it.pos.getRangeTo(pos) < 4 } })
-        .map { it.unsafeCast<StructureContainer>() }
-        .firstOrNull() // TODO Double check if this breaks
-        //.firstOrNull { it.store[RESOURCE_ENERGY] < it.store.getCapacity(RESOURCE_ENERGY) }
+    return room.bySort(STRUCTURE_CONTAINER, f = withinRange(4, this.pos),
+        sort = byDistance(pos)) as? StructureContainer
 }
 
 fun Creep.findClosestContainer(): StructureContainer? {
@@ -597,7 +615,8 @@ fun Creep.fastTransfer(target: StoreOwner, resource: ResourceConstant, reverse: 
         // We just emptied our store
         memory.collectingFlag = FLAG_COLLECTING
         clearTarget()
-        say("\uD83D\uDD04 collect")
+        if (!memory.collecting)
+            say("\uD83D\uDD04 collect")
         // Rerun the creep to find a new target
         //if (!reverse) this.executeRole()
     }
@@ -606,7 +625,8 @@ fun Creep.fastTransfer(target: StoreOwner, resource: ResourceConstant, reverse: 
         if (target is Creep) {
             target.memory.collectingFlag = FLAG_DISTRIBUTING
             target.clearTarget()
-            target.say("\uD83D\uDD04 distribute")
+            if (target.memory.collecting)
+                target.say("\uD83D\uDD04 distribute")
             // DO NOT EXECUTE, WE DON'T KNOW IF IT ALREADY DID AN ACTION
             //if (reverse) target.executeRole()
         }

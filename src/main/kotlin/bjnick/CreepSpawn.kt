@@ -99,6 +99,10 @@ fun mixedRoadFastWorker(maxEnergy: Int, workParts: Int = 3): bodyArray {
     }} + Array(maxSmallParts) { MOVE }
 }
 
+val minFastHarvester5work: Array<BodyPartConstant> = arrayOf(
+    MOVE, WORK, WORK, MOVE, WORK, WORK, MOVE, WORK, CARRY
+)
+
 // Off-road, Example: CARRY MOVE WORK MOVE WORK MOVE CARRY
 fun mixedFastWorker(maxEnergy: Int, workParts: Int = 3): bodyArray {
     val maxSingleWorkUnits = min(workParts,(maxEnergy) / 200)
@@ -251,7 +255,7 @@ fun spawnCreeps(
 
         ///// FOR THE OTHER ROOM
         count(Role.OUTER_HARVESTER, 100, roomA) < 2 ->
-            SpawnRequest(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity)) { it.assignedRoom = roomA }
+            SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester5work) { it.assignedRoom = roomA }
 
         // Reduced since roads were built
         count(Role.SETTLER, 50, roomA) < 2 -> // different creep body
@@ -267,7 +271,11 @@ fun spawnCreeps(
 
         // THE OTHER ROOM
         count(Role.OUTER_HARVESTER, 100, roomA) < 4 ->
-            SpawnRequest(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity)) { it.assignedRoom = roomA }
+            SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester5work) { it.assignedRoom = roomA }
+
+        ///// FOR THE EXTRA EXPANSION
+        count(Role.OUTER_HARVESTER, 100, roomB) < 2 ->
+            SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester5work) { it.assignedRoom = roomB }
 
         count(Role.CARAVAN, 0, roomA) < 3 ->
             SpawnRequest(Role.CARAVAN, bestOnRoad(UNLIMITED, 1000)) { it.assignedRoom = roomA }
@@ -281,17 +289,16 @@ fun spawnCreeps(
         //creeps.count { it.memory.role == Role.CLAIMER } < 1 -> SpawnRequest(Role.CLAIMER, arrayOf(MOVE, MOVE, MOVE, MOVE, CLAIM))
 
         ///// FOR THE EXTRA EXPANSION
-        count(Role.OUTER_HARVESTER, 100, roomB) < 2 ->
-            SpawnRequest(Role.OUTER_HARVESTER, bestFastRoadWorker(capacity)) { it.assignedRoom = roomB }
-
         count(Role.SETTLER, 0, roomB) < 2 ->
             SpawnRequest(Role.SETTLER, bestOffRoadWorker(capacity)) { it.assignedRoom = roomB }
 
-        count(Role.CARAVAN, 0, roomB) < 2 ->
+        count(Role.CARAVAN, 0, roomB) < 1 -> // REDUCED TO ELIMINATE WAITING
             SpawnRequest(Role.CARAVAN, bestOnRoad(UNLIMITED, 1000)) { it.assignedRoom = roomB }
 
-
         creeps.count { it.memory.role == Role.UPGRADER } < 4 -> SpawnRequest(Role.UPGRADER, bestWorker(capacity))
+
+        /// MINERAL AND MARKET
+        count(Role.EXTRACTOR, 100) < 1 -> SpawnRequest(Role.EXTRACTOR, bestWorker(capacity))
 
         else -> return
     }

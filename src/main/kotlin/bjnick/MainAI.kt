@@ -95,6 +95,11 @@ fun gameLoop() {
         Memory.forceReassignDistributionCategories = false
     }
 
+    // Assign tags to containers
+    Game.rooms.values.forEach {
+        it.tagContainers()
+    }
+
     // If there is a ruin of a rampart/wall put a construction site on it
     Game.rooms.values.forEach {
         it.find(FIND_RUINS)
@@ -117,7 +122,7 @@ fun gameLoop() {
             if (it.storage != null) {
                 val storage = it.storage!!
                 val storageContent = "${storage.store.getUsedCapacity()}"
-                it.visual.text(storageContent, storage.pos.x + 0.0, storage.pos.y - 2 + 0.25,
+                it.visual.text(storageContent, storage.pos.x + 0.0, storage.pos.y + 2 + 0.25,
                     options { color = "#FFFFAA"; align = TEXT_ALIGN_CENTER })
             }
         }
@@ -273,4 +278,3 @@ fun Room.visualizeRepairs(showUnder: Int) {
     val toBeRepaired = this.find(FIND_STRUCTURES, options { filter = { it.hits < it.hitsMax && it.hits < showUnder } })
     toBeRepaired.forEach { this.visual.circle(it.pos, options { radius = 0.5; fill = "#ff0000"; opacity = 0.2 }) }
 }
-

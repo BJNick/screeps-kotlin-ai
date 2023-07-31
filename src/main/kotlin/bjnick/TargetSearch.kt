@@ -1,9 +1,11 @@
 package bjnick
 
 import assignedRoom
+import structureTags
 import role
 import screeps.api.*
 import screeps.api.structures.Structure
+import screeps.api.structures.StructureContainer
 import kotlin.math.min
 
 // Define filter lambda type
@@ -12,11 +14,17 @@ typealias Filter<T> = (T) -> Boolean
 /// COMMON FILTERS
 
 // SPECIFIC TO ENERGY
-val hasFreeCapacity: Filter<Any> = { owner -> owner.unsafeCast<StoreOwner>()
+val hasNoEnergy: Filter<Any> = { owner -> owner.unsafeCast<StoreOwner>()
     .store.getFreeCapacity(RESOURCE_ENERGY) > 0 }
 
-val hasUsedCapacity: Filter<Any> = { owner -> owner.unsafeCast<StoreOwner>()
+val hasSomeEnergy: Filter<Any> = { owner -> owner.unsafeCast<StoreOwner>()
     .store.getUsedCapacity(RESOURCE_ENERGY) > 0 }
+
+fun hasNoneOf(resource: ResourceConstant): Filter<Any> = { owner -> owner.unsafeCast<StoreOwner>()
+    .store.getUsedCapacity(resource) == 0 }
+
+fun hasSomeOf(resource: ResourceConstant): Filter<Any> = { owner -> owner.unsafeCast<StoreOwner>()
+    .store.getUsedCapacity(resource) > 0 }
 
 fun Structure.isType(vararg types: StructureConstant): Boolean = this.structureType in types
 fun isType(vararg types: StructureConstant): Filter<Structure> = { it.structureType in types }
@@ -45,6 +53,12 @@ fun hasAtLeastEnergy(amount: Int): Filter<Any> =
 fun hasAtMostEnergy(amount: Int): Filter<Any> =
     { creep -> creep.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) <= amount }
 
+fun hasAtLeast(amount: Int, resource: ResourceConstant): Filter<Any> =
+{ creep -> creep.unsafeCast<StoreOwner>().store.getUsedCapacity(resource) >= amount }
+
+fun hasAtMost(amount: Int, resource: ResourceConstant): Filter<Any> =
+{ creep -> creep.unsafeCast<StoreOwner>().store.getUsedCapacity(resource) <= amount }
+
 fun withinRange(range: Int, pos: RoomPosition): Filter<HasPosition> = { o -> o.pos.inRangeTo(pos, range) }
 
 val notControllerBuffer: Filter<HasPosition> = {
@@ -58,11 +72,17 @@ fun isUnoccupied(except: Creep? = null): Filter<HasPosition> = {
     creeps!!.isEmpty() || creeps[0] == except
 }
 
+fun hasTag(tag: String): Filter<Structure> = { it.hasTag(tag) }
+fun hasNoTag(vararg tags: String): Filter<Structure> = { tags.all { tag -> !it.hasTag(tag) } }
+
 // Define an "and" operator for filters
 infix fun <T> Filter<T>.and(other: Filter<T>): Filter<T> = { this(it) && other(it) }
 
 // Define an "or" operator for filters
 infix fun <T> Filter<T>.or(other: Filter<T>): Filter<T> = { this(it) || other(it) }
+
+// Define a "not"
+fun <T> Filter<T>.not(): Filter<T> = { !this(it) }
 
 // Define sorter lambda type
 typealias Sorter<T, R> = (T) -> R
@@ -193,7 +213,7 @@ fun Creep.findConvenientEnergy(room: Room = this.room, bias: RoomPosition = pos,
         // Else if there is a carrier with enough energy NEARBY, use that one instead
         val carrierCreep = room.bySort(
             FIND_MY_CREEPS,
-            f = hasUsedCapacity and hasRole(Role.CARRIER) and withinRange(takeFromCarriers, pos),
+            f = hasSomeEnergy and hasRole(Role.CARRIER) and withinRange(takeFromCarriers, pos),
             sort = byEnoughEnergy(store.getFreeCapacity() / 2) then byDistance(bias) then byMostUsed
         )
         if (carrierCreep != null) return carrierCreep.unsafeCast<StoreOwner>()
@@ -204,7 +224,7 @@ fun Creep.findConvenientEnergy(room: Room = this.room, bias: RoomPosition = pos,
     // If there is a container with enough energy, use it
     val harvesterContainer = room.bySort(
         preference,
-        f = hasUsedCapacity and notControllerBuffer,
+        f = hasSomeEnergy and notControllerBuffer,
         sort = byEnoughEnergy(store.getFreeCapacity() / 2) then byDistance(
             bias,
             3
@@ -216,7 +236,7 @@ fun Creep.findConvenientEnergy(room: Room = this.room, bias: RoomPosition = pos,
     // Else if there is a harvester with enough energy, use that one instead
     val harvesterCreep = room.bySort(
         FIND_MY_CREEPS,
-        f = hasUsedCapacity and hasRole(Role.HARVESTER, Role.OUTER_HARVESTER),
+        f = hasSomeEnergy and hasRole(Role.HARVESTER, Role.OUTER_HARVESTER),
         sort = byEnoughEnergy(store.getFreeCapacity() / 2) then byDistance(bias, 5) then byMostUsed
     )
 
@@ -228,7 +248,7 @@ fun Creep.findCaravanPickupEnergy(room: Room = this.room, bias: RoomPosition = p
 
     // If there is a container with enough energy, use it
     val harvesterContainer = room.bySort(STRUCTURE_CONTAINER,
-        f = hasUsedCapacity,
+        f = hasSomeEnergy and hasTag(SOURCE_BUFFER),
         sort = byEnoughEnergy(store.getFreeCapacity()) then byDistance(bias, 3)
                 then byDistance(room.controller!!.pos).reversed() then byMostUsed)
 
@@ -237,10 +257,10 @@ fun Creep.findCaravanPickupEnergy(room: Room = this.room, bias: RoomPosition = p
 }
 
 
-fun Creep.findConvenientContainer(): Structure? {
+fun Creep.findConvenientContainer(avoidTags: Array<String>): Structure? {
     val preferredStructures: Array<StructureConstant> = arrayOf(STRUCTURE_TOWER, STRUCTURE_STORAGE, STRUCTURE_CONTAINER)
     return room.bySort(preferredStructures,
-        f = hasFreeCapacity,
+        f = hasNoEnergy and hasNoTag(*avoidTags),
         sort = byEnoughSpace(store.getUsedCapacity()) then byDistance(pos, 10) then byOrderIn(preferredStructures))
     .unsafeCast<Structure>()
 }
@@ -266,15 +286,64 @@ fun Creep.findInfrastructureRepairTarget(maxHits: Int = 10000, bias: RoomPositio
         ?.unsafeCast<Structure>()
 }
 
+val SOURCE_BUFFER = "SOURCE_BUFFER"
+val CONTROLLER_BUFFER = "CONTROLLER_BUFFER"
+val MINERAL_BUFFER = "MINERAL_BUFFER"
+val TOWER_BUFFER = "TOWER_BUFFER"
+val GENERIC_CONTAINER = "GENERIC_CONTAINER"
+
+
+fun Structure.getTags(): Array<String> {
+    return this.room.memory.structureTags.filter { it.first == this.id }.map { it.second }.toTypedArray()
+}
+
+fun Structure.hasTag(tag: String): Boolean {
+    return this.room.memory.structureTags.any { it.first == this.id && it.second == tag }
+}
+
+fun Structure.addTag(tag: String) {
+    if (hasTag(tag)) return
+    this.room.memory.structureTags += Pair(this.id, tag)
+}
+
+fun Structure.removeTag(tag: String) {
+    this.room.memory.structureTags = this.room.memory.structureTags
+        .filter { it.first != this.id || it.second != tag }.toTypedArray()
+}
+
+fun Room.tagContainers() {
+    //f = { it: StructureContainer -> it.getTags().isEmpty() }
+    val containers = this.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_CONTAINER &&
+            it.unsafeCast<StructureContainer>().getTags().isEmpty() } })
+        .unsafeCast<Array<StructureContainer>>()
+    for (container in containers) {
+        if (container.pos.findInRange(FIND_SOURCES, 2).isNotEmpty()) {
+            container.addTag(SOURCE_BUFFER)
+        }
+        if (container.pos.findInRange(FIND_MINERALS, 2).isNotEmpty()) {
+            container.addTag(MINERAL_BUFFER)
+        }
+        if (this.controller != null && container.pos.inRangeTo(this.controller!!.pos, 3)) {
+            container.addTag(CONTROLLER_BUFFER)
+        }
+        if (container.pos.findInRange(FIND_MY_STRUCTURES, 2, options { filter = { it.structureType == STRUCTURE_TOWER } }).isNotEmpty()) {
+            container.addTag(TOWER_BUFFER)
+        }
+        if (container.getTags().isEmpty()) {
+            container.addTag(GENERIC_CONTAINER)
+        }
+    }
+
+}
 
 
 // TESTING
 fun test() {
     Game.rooms.values[0].byOrder(FIND_CREEPS)
     Game.rooms.values[0].byOrder(FIND_CREEPS, f = { it.hits < it.hitsMax })
-    Game.rooms.values[0].byOrder(FIND_CREEPS, f = hasFreeCapacity)
-    Game.rooms.values[0].byOrder(FIND_CREEPS, f = hasFreeCapacity and hasUsedCapacity)
-    Game.rooms.values[0].byOrder(FIND_CREEPS, f = hasFreeCapacity or hasUsedCapacity)
+    Game.rooms.values[0].byOrder(FIND_CREEPS, f = hasNoEnergy)
+    Game.rooms.values[0].byOrder(FIND_CREEPS, f = hasNoEnergy and hasSomeEnergy)
+    Game.rooms.values[0].byOrder(FIND_CREEPS, f = hasNoEnergy or hasSomeEnergy)
 
     Game.rooms.values[0].bySort(FIND_CREEPS, sort = { it.hits })
     Game.rooms.values[0].bySort(FIND_CREEPS, f = { it.hits < it.hitsMax }, sort = { it.hits })
@@ -291,9 +360,9 @@ fun test() {
     Game.rooms.values[0].byOrder(FIND_STRUCTURES, f = { it.isType(STRUCTURE_CONTAINER) } )
     Game.rooms.values[0].byOrder(FIND_STRUCTURES, f = { it.isType(STRUCTURE_CONTAINER, STRUCTURE_ROAD) } )
 
-    Game.rooms.values[0].byOrder(FIND_STRUCTURES, f = isType(STRUCTURE_CONTAINER) and hasFreeCapacity )
+    Game.rooms.values[0].byOrder(FIND_STRUCTURES, f = isType(STRUCTURE_CONTAINER) and hasNoEnergy )
 
-    Game.rooms.values[0].byOrder(STRUCTURE_CONTAINER, f = hasFreeCapacity)
+    Game.rooms.values[0].byOrder(STRUCTURE_CONTAINER, f = hasNoEnergy)
 
 
 

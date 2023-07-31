@@ -5,7 +5,6 @@ import distributionAssignments
 import distributionCategory
 import role
 import screeps.api.*
-import screeps.api.structures.StructureContainer
 
 // A module to manage energy distribution via orders to haulers
 
@@ -103,28 +102,24 @@ fun Creep.findTargetByCategory(seed: Int = 0): HasPosition? {
             getVacantSpawnOrExt(room)
 
         CONTROLLER -> // Supply upgrader creeps
-        { // Either container within 3 squares of controller, or upgrader creep
-            room.byOrder(STRUCTURE_CONTAINER, f = hasFreeCapacity and withinRange(3, room.controller!!.pos))
-                ?.unsafeCast<StructureContainer>() ?:
+        { // Either container within 3 squares of controller, or upgrader creep ?:
+            room.bySort(STRUCTURE_CONTAINER, f = hasNoEnergy and hasTag(CONTROLLER_BUFFER), sort = byDistance(this.pos)) ?:
             room.bySort(
-                FIND_MY_CREEPS, f = hasRole(Role.UPGRADER) and hasFreeCapacity,
+                FIND_MY_CREEPS, f = hasRole(Role.UPGRADER) and hasNoEnergy,
                 sort = byMostFree then byDistance(this.pos)
             )
         }
 
         BUILDERS -> // Supply builder creeps
-            room.bySort(FIND_MY_CREEPS, f = hasRole(Role.BUILDER) and { hasFreeCapacity(it) || constructionSitesPresent },
+            room.bySort(FIND_MY_CREEPS, f = hasRole(Role.BUILDER) and { hasNoEnergy(it) || constructionSitesPresent },
                 sort = byDistance(this.pos) then byMostFree)
 
         TOWERS -> // Supply towers
-            room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_TOWER &&
-                    it.unsafeCast<StoreOwner>().store.getFreeCapacity(RESOURCE_ENERGY) > 100 } })
-                .minByOrNull { it.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
+            room.bySort(STRUCTURE_TOWER, f = hasNoEnergy and hasAtMostEnergy(900), sort = byMostFree then byDistance(this.pos)) ?:
+            room.bySort(STRUCTURE_CONTAINER, f = hasNoEnergy and hasTag(TOWER_BUFFER), sort = byDistance(this.pos))
 
         STORAGE -> // Supply storage IF a container is full
-            room.find(FIND_STRUCTURES, options { filter = { it.structureType == STRUCTURE_STORAGE &&
-                    it.unsafeCast<StoreOwner>().store.getFreeCapacity(RESOURCE_ENERGY) > 0 } })
-                .minByOrNull { it.unsafeCast<StoreOwner>().store.getUsedCapacity(RESOURCE_ENERGY) ?: 0 }
+            if (room.storage != null && room.storage!!.store.getFreeCapacity(RESOURCE_ENERGY) > 0) room.storage else null
 
         else -> null
     }

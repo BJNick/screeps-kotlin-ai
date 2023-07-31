@@ -1,5 +1,4 @@
 
-import bjnick.Role
 import screeps.api.*
 import screeps.utils.memory.memory
 
@@ -43,6 +42,8 @@ val FLAG_DISTRIBUTING = 2
 
 var CreepMemory.collectingFlag: Int by memory { FLAG_IGNORE }
 
+var CreepMemory.mineralType: String by memory { "" }
+
 /* Rest of the persistent memory structures.
 * These set an unused test variable to 0. This is done to illustrate the how to add variables to
 * the memory. Change or remove it at your convenience.*/
@@ -74,6 +75,9 @@ var RoomMemory.distributionAssignments: Array<String> by memory { arrayOf() }
 var RoomMemory.graphOnTopSide: Boolean by memory { false }
 
 var RoomMemory.prospectorsUpgradeController: Boolean by memory { false }
+
+var RoomMemory.structureTags: Array<Pair<String, String>> by memory { arrayOf() } // "id", "tag"
+
 
 // GLOBAL memory
 
