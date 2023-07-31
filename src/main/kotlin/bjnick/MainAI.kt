@@ -41,8 +41,16 @@ fun gameLoop() {
     // just an example of how to use room memory
     //mainSpawn.room.memory.numberOfCreeps = mainSpawn.room.find(FIND_CREEPS).count()
 
+    //console.log(mainSpawn.room.energyAvailable)
+
     //make sure we have at least some creeps
     spawnCreeps(Game.creeps.values, mainSpawn)
+    if (mainSpawn.spawning != null) {
+        // SECONDARY SPAWN
+        val spawn = Game.spawns.values.firstOrNull { it.spawning == null }
+        if (spawn != null)
+            spawnCreeps(Game.creeps.values, spawn)
+    }
 
     val cpuUsage: MutableList<String> = mutableListOf()
 
@@ -51,7 +59,7 @@ fun gameLoop() {
         try {
             creep.executeRole()
         } catch (e: dynamic) {
-            console.log("Error in creep ${creep.name} with role ${creep.memory.role}: ${e.message}\n${e.stack}")
+            console.log("Error in creep " + creep?.name + " with role " + creep?.memory?.role + ": " + e?.message + "\n" + e?.stack)
             continue
         }
         // MEASURE PERFORMANCE
@@ -121,7 +129,7 @@ fun gameLoop() {
             // If it has a storage, show the storage content
             if (it.storage != null) {
                 val storage = it.storage!!
-                val storageContent = "${storage.store.getUsedCapacity()}"
+                val storageContent = "${storage.store.getUsedCapacity(RESOURCE_ENERGY)}"
                 it.visual.text(storageContent, storage.pos.x + 0.0, storage.pos.y + 2 + 0.25,
                     options { color = "#FFFFAA"; align = TEXT_ALIGN_CENTER })
             }
@@ -252,12 +260,13 @@ fun defendRoom(room: Room) {
     val towers = room.find(FIND_MY_STRUCTURES, options { filter = { it.structureType == STRUCTURE_TOWER } }) as Array<StructureTower>
     if (hostiles.isNotEmpty()) {
         val username = hostiles[0].owner.username
-        if (username != "Invader" && !(Memory.ignorePlayers.contains(username)))
-            Game.notify("${getSKTime()} $username spotted in room ${room.name}")
+        val areInvaders = username == "Invader"
+        //if (username != "Invader" && !(Memory.ignorePlayers.contains(username)))
+        Game.notify("${getSKTime()} $username spotted in room ${room.name}")
         if (!(Memory.ignorePlayers.contains(username)))
             towers.forEach { tower -> tower.attack(hostiles[0]) }
         // ACTIVATE SAFE MODE
-        if (room.controller?.safeModeAvailable > 0)
+        if (!areInvaders && room.controller?.safeModeAvailable > 0)
             room.controller?.activateSafeMode()
     } else if (damagedCreeps.isNotEmpty()) {
         towers.forEach { tower -> tower.heal(damagedCreeps[0]) }

@@ -52,7 +52,7 @@ fun Source.optimalHarvesters(workParts: Int): Int {
 fun Room.optimalHarvesters(workParts: Int): Int {
     if (this.memory.optimalHarvesters == -1 || this.memory.harvesterWorkParts != workParts) {
         this.memory.optimalHarvesters = this.find(FIND_SOURCES).sumOf { it.optimalHarvesters(workParts) }
-        this.memory.harvesterWorkParts = workParts
+        //this.memory.harvesterWorkParts = workParts
     }
     return this.memory.optimalHarvesters
 }

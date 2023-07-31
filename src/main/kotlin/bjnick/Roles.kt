@@ -79,6 +79,9 @@ fun Creep.pathColor() = when (memory.role) {
 
 
 fun Creep.carrier() {
+    if (stepAwayFromBorder()) return
+    if (gotoHomeRoom()) return // Home room only role
+
     if (useDistributionSystem(room))
         if (memory.distributionCategory == 0) // FORCE ASSIGNMENT
             pickDistributionCategory(this, room)
@@ -125,7 +128,13 @@ fun Creep.carrier() {
             memory.collecting = false // keep distributing even if not full
         }
     } else {
-        if (useDistributionSystem(room))
+
+        if (room.energyAvailable < room.energyCapacityAvailable/2) {
+            if (Game.time % 10 == name.hashCode()%10)
+                say("Spawn!")
+            putEnergy(getVacantSpawnOrExt(room)) // EMERGENCY MEASURES
+
+        } else if (useDistributionSystem(room))
             putEnergy(findTargetByCategory())
         else
             putEnergy(findEnergyTarget(room))
@@ -140,7 +149,10 @@ fun Creep.carrier() {
     }
 }
 
-fun Creep.harvester() {
+fun Creep.harvester(toHomeRoom: Boolean = true) {
+    if (stepAwayFromBorder()) return
+    if (toHomeRoom && gotoHomeRoom()) return // Home room only role
+
     val container = findBufferContainer()
     if (isCollecting()) {
         if (store.getFreeCapacity() > 0)
@@ -164,6 +176,9 @@ fun Creep.harvester() {
 }
 
 fun Creep.builder() {
+    if (stepAwayFromBorder()) return
+    if (gotoHomeRoom()) return // Home room only role
+
     if (executeCachedTask()) return // TODO TESTING
 
     /*if (room.energyAvailable < room.energyCapacityAvailable &&
@@ -200,6 +215,9 @@ fun Creep.builder() {
 }
 
 fun Creep.upgrader() {
+    if (stepAwayFromBorder()) return
+    if (gotoHomeRoom()) return // Home room only role
+
     val container = findBufferContainer()
     if (isCollecting()) {
         if (container != null && store.getUsedCapacity() < 10 && container.store[RESOURCE_ENERGY] > 0) {
@@ -229,6 +247,9 @@ fun Creep.upgrader() {
 }
 
 fun Creep.repairer() {
+    if (stepAwayFromBorder()) return
+    if (gotoHomeRoom()) return // Home room only role
+
     if (executeCachedTask()) return // TODO TESTING
 
     if (isCollecting()) {
@@ -559,7 +580,7 @@ fun Creep.outer_harvester() {
     }
 
     // Then do basic harvester stuff
-    harvester()
+    harvester(false)
 }
 
 fun Creep.caravan() {
@@ -581,12 +602,14 @@ fun Creep.caravan() {
             return
         }
 
-        val destination = findCaravanPickupEnergy(bias = cornerBias())
+        var destination = findCaravanPickupEnergy(bias = cornerBias())
         if (room.getTotalContainerEnergy() < this.store.getCapacity()!!*1.5) {
             // Wait for it to fill up, close to the source
             if (Game.time % 4 == name.hashCode() % 4)
                 say("Waiting")
-            moveWithin(destination!!.pos, 2)
+            destination = destination ?: room.byOrder(STRUCTURE_CONTAINER)
+            if (destination != null)
+                moveWithin(destination!!.pos, 2)
             return
         }
         collectFrom(destination)
@@ -693,6 +716,9 @@ fun Creep.ranger() {
 
 
 fun Creep.errander() {
+    if (stepAwayFromBorder()) return
+    if (gotoHomeRoom()) return // Home room only role
+
     room.visual.text("E", pos.x+0.0, pos.y+1.0, options { color = "#FFFFFF"; font = "0.5"; opacity = 0.5 })
 
     if (isCollecting()) {
@@ -858,6 +884,9 @@ fun Creep.bouncer() {
 }
 
 fun Creep.extractor() {
+    if (stepAwayFromBorder()) return
+    if (gotoHomeRoom()) return // Home room only role
+
     // Extracts minerals from a mineral deposit
     // does not move to other rooms
     val container = findBufferContainer()
