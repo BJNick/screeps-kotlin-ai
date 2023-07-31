@@ -569,9 +569,9 @@ fun Creep.gotoAssignedRoom(): Boolean {
     return false
 }
 
-fun Creep.gotoHomeRoom(): Boolean {
-    if (memory.homeRoom != "") {
-        return moveToRoom(memory.homeRoom)
+fun Creep.gotoGlobalHomeRoom(): Boolean {
+    if (Memory.homeRoom != "") {
+        return moveToRoom(Memory.homeRoom)
     }
     return false
 }

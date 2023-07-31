@@ -80,7 +80,7 @@ fun Creep.pathColor() = when (memory.role) {
 
 fun Creep.carrier() {
     if (stepAwayFromBorder()) return
-    if (gotoHomeRoom()) return // Home room only role
+    if (gotoGlobalHomeRoom()) return // Home room only role
 
     if (useDistributionSystem(room))
         if (memory.distributionCategory == 0) // FORCE ASSIGNMENT
@@ -151,7 +151,7 @@ fun Creep.carrier() {
 
 fun Creep.harvester(toHomeRoom: Boolean = true) {
     if (stepAwayFromBorder()) return
-    if (toHomeRoom && gotoHomeRoom()) return // Home room only role
+    if (toHomeRoom && gotoGlobalHomeRoom()) return // Home room only role
 
     val container = findBufferContainer()
     if (isCollecting()) {
@@ -177,7 +177,7 @@ fun Creep.harvester(toHomeRoom: Boolean = true) {
 
 fun Creep.builder() {
     if (stepAwayFromBorder()) return
-    if (gotoHomeRoom()) return // Home room only role
+    if (gotoGlobalHomeRoom()) return // Home room only role
 
     if (executeCachedTask()) return // TODO TESTING
 
@@ -216,7 +216,7 @@ fun Creep.builder() {
 
 fun Creep.upgrader() {
     if (stepAwayFromBorder()) return
-    if (gotoHomeRoom()) return // Home room only role
+    if (gotoGlobalHomeRoom()) return // Home room only role
 
     val container = findBufferContainer()
     if (isCollecting()) {
@@ -248,7 +248,7 @@ fun Creep.upgrader() {
 
 fun Creep.repairer() {
     if (stepAwayFromBorder()) return
-    if (gotoHomeRoom()) return // Home room only role
+    if (gotoGlobalHomeRoom()) return // Home room only role
 
     if (executeCachedTask()) return // TODO TESTING
 
@@ -373,7 +373,7 @@ fun Creep.prospector() {
 
         if (memory.homeRoom == "")
             return
-        if (gotoHomeRoom()) return
+        if (gotoGlobalHomeRoom()) return
 
         val container = findClosestContainer()
         if (container != null)
@@ -614,7 +614,7 @@ fun Creep.caravan() {
         }
         collectFrom(destination)
     } else {
-        if (gotoHomeRoom()) return
+        if (gotoGlobalHomeRoom()) return
         putEnergy(findConvenientContainer(avoidTags = arrayOf(MINERAL_BUFFER)))
     }
 }
@@ -717,7 +717,7 @@ fun Creep.ranger() {
 
 fun Creep.errander() {
     if (stepAwayFromBorder()) return
-    if (gotoHomeRoom()) return // Home room only role
+    if (gotoGlobalHomeRoom()) return // Home room only role
 
     room.visual.text("E", pos.x+0.0, pos.y+1.0, options { color = "#FFFFFF"; font = "0.5"; opacity = 0.5 })
 
@@ -885,7 +885,7 @@ fun Creep.bouncer() {
 
 fun Creep.extractor() {
     if (stepAwayFromBorder()) return
-    if (gotoHomeRoom()) return // Home room only role
+    if (gotoGlobalHomeRoom()) return // Home room only role
 
     // Extracts minerals from a mineral deposit
     // does not move to other rooms
