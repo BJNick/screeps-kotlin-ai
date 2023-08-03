@@ -261,7 +261,7 @@ fun spawnCreeps(
         // creeps.count { it.memory.role == Role.PROSPECTOR } < 4 && creeps.count { it.ticksToLive<100 } == 0 -> SpawnRequest(Role.PROSPECTOR, mixedFastWorker(capacity))
 
         ///// FOR THE OTHER ROOM
-        count(Role.OUTER_HARVESTER, 150, roomA) < 2 ->
+        count(Role.OUTER_HARVESTER, 200, roomA) < 2 ->
             SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester6work) { it.assignedRoom = roomA }
 
         // Reduced since roads were built
@@ -277,7 +277,7 @@ fun spawnCreeps(
         creeps.count { it.memory.role == Role.UPGRADER } < 3 -> SpawnRequest(Role.UPGRADER, bestWorker(capacity))
 
         ///// FOR THE EXTRA EXPANSION
-        count(Role.OUTER_HARVESTER, 150, roomB) < 1 ->
+        count(Role.OUTER_HARVESTER, 200, roomB) < 1 ->
             SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester6work) { it.assignedRoom = roomB }
 
         count(Role.CARAVAN, 0, roomA) < 3 ->
