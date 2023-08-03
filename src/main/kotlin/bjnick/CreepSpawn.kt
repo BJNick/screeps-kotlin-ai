@@ -104,6 +104,10 @@ val minFastHarvester5work: Array<BodyPartConstant> = arrayOf(
     MOVE, WORK, WORK, MOVE, WORK, WORK, MOVE, WORK, CARRY
 )
 
+val minFastHarvester6work: Array<BodyPartConstant> = arrayOf(
+    MOVE, WORK, WORK, MOVE, WORK, WORK, MOVE, WORK, WORK, MOVE, CARRY
+)
+
 // Off-road, Example: CARRY MOVE WORK MOVE WORK MOVE CARRY
 fun mixedFastWorker(maxEnergy: Int, workParts: Int = 3): bodyArray {
     val maxSingleWorkUnits = min(workParts,(maxEnergy) / 200)
@@ -257,8 +261,8 @@ fun spawnCreeps(
         // creeps.count { it.memory.role == Role.PROSPECTOR } < 4 && creeps.count { it.ticksToLive<100 } == 0 -> SpawnRequest(Role.PROSPECTOR, mixedFastWorker(capacity))
 
         ///// FOR THE OTHER ROOM
-        count(Role.OUTER_HARVESTER, 100, roomA) < 2 ->
-            SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester5work) { it.assignedRoom = roomA }
+        count(Role.OUTER_HARVESTER, 150, roomA) < 2 ->
+            SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester6work) { it.assignedRoom = roomA }
 
         // Reduced since roads were built
         count(Role.SETTLER, 50, roomA) < 2 -> // different creep body
@@ -272,13 +276,9 @@ fun spawnCreeps(
         creeps.count { it.memory.role == Role.CARRIER } < 6 -> SpawnRequest(Role.CARRIER, bestOnRoad(capacity)) // CHANGED FROM OFF ROAD
         creeps.count { it.memory.role == Role.UPGRADER } < 3 -> SpawnRequest(Role.UPGRADER, bestWorker(capacity))
 
-        // THE OTHER ROOM
-        count(Role.OUTER_HARVESTER, 100, roomA) < 4 ->
-            SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester5work) { it.assignedRoom = roomA }
-
         ///// FOR THE EXTRA EXPANSION
-        count(Role.OUTER_HARVESTER, 100, roomB) < 2 ->
-            SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester5work) { it.assignedRoom = roomB }
+        count(Role.OUTER_HARVESTER, 150, roomB) < 1 ->
+            SpawnRequest(Role.OUTER_HARVESTER, minFastHarvester6work) { it.assignedRoom = roomB }
 
         count(Role.CARAVAN, 0, roomA) < 3 ->
             SpawnRequest(Role.CARAVAN, bestOnRoad(UNLIMITED, 1000)) { it.assignedRoom = roomA }
