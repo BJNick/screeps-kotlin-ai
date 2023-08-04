@@ -160,7 +160,12 @@ fun <T> Room.byOrder(findConstant: FindConstant<T>, f: Filter<T> = { _: T -> tru
 }
 
 fun Room.byOrder(structureConstants: Array<StructureConstant>, f: Filter<Structure> = { _: Structure -> true } ): dynamic {
-    return byOrder(arrayOf(FIND_STRUCTURES), isType(structureConstants) and f)
+    //return byOrder(arrayOf(FIND_STRUCTURES), isType(structureConstants) and f)
+    for (structureConstant in structureConstants) {
+        val result = cachedStructures(this, structureConstant).firstOrNull(f)
+        if (result != null) return result
+    }
+    return null
 }
 
 fun Room.byOrder(structureConstant: StructureConstant, f: Filter<Structure> = { _: Structure -> true } ): dynamic {
@@ -192,6 +197,11 @@ fun <T, R: Comparable<R>> Room.bySort(findConstant: FindConstant<T>, f: Filter<T
 
 fun <R: Comparable<R>> Room.bySort(structureConstants: Array<StructureConstant>, f: Filter<Structure> = { _: Structure -> true }, sort: Sorter<Structure, R>): dynamic {
     return bySort(FIND_STRUCTURES, f = isType(structureConstants) and f, sort = {s: Structure -> sort(s)})
+    /*val results = mutableListOf<Structure>()
+    for (structureConstant in structureConstants) {
+        results.addAll(cachedStructures(this, structureConstant).filter(f))
+    }
+    return results.minByOrNull(sort)*/
 }
 
 fun <R: Comparable<R>> Room.bySort(structureConstant: StructureConstant, f: Filter<Structure> = { _: Structure -> true }, sort: Sorter<Structure, R>): dynamic {
@@ -200,6 +210,33 @@ fun <R: Comparable<R>> Room.bySort(structureConstant: StructureConstant, f: Filt
 
 fun <T, R: Comparable<R>> Array<T>.bySort(f: Filter<T> = { _: T -> true }, sort: Sorter<T, R>): dynamic {
     return this.filter(f).minByOrNull(sort)
+}
+
+
+fun <T, R: Comparable<R>> Room.bySortN(n: Int, findConstants: Array<FindConstant<T>>, f: Filter<T> = { _: T -> true }, sort: Sorter<T, R>): Array<T> {
+    val results = mutableListOf<T>()
+    for (findConstant in findConstants) {
+        results.addAll(this.find(findConstant, options { filter = f }))
+    }
+    return minN(n, results, sort)
+}
+
+fun <R: Comparable<R>> Room.bySortN(n: Int, structureConstants: Array<StructureConstant>, f: Filter<Structure> = { _: Structure -> true }, sort: Sorter<Structure, R>): Array<Structure> {
+    return bySortN(n, arrayOf(FIND_STRUCTURES), f = isType(structureConstants) and f, sort = {s: Structure -> sort(s)})
+}
+
+fun <T, R: Comparable<R>> minN(n: Int, collection: Iterable<T>, sort: Sorter<T, R>): Array<T> {
+    return collection.fold(ArrayList<T>()) { topList, candidate ->
+        if (topList.size < n || sort(candidate) < sort(topList.last())) {
+            // ideally insert at the right place
+            topList.add(candidate)
+            topList.sortBy(sort)
+            // trim to size
+            if (topList.size > n)
+                topList.removeAt(n)
+        }
+        topList
+    }.toTypedArray()
 }
 
 
@@ -285,6 +322,43 @@ fun Creep.findInfrastructureRepairTarget(maxHits: Int = 10000, bias: RoomPositio
         sort = byOrderIn(preferredStructures) then byMaxHits then { it.hits/1000 } then byDistance(bias))
         ?.unsafeCast<Structure>()
 }
+
+val repairStructureFilter = lessThanMaxHits and lessHitsThan(10000) or
+        (isType(STRUCTURE_CONTAINER) and lessHitsThan(30000))
+
+fun Room.findTowerRepairTargets(n: Int): Array<Structure> {
+    return this.bySortN(n, arrayOf(FIND_STRUCTURES),
+        f = repairStructureFilter,
+         sort = byTrueFirst(lessHitsThan(500)) then
+                byTrueFirst(lessHitsThan<Structure>(30000) and isType(STRUCTURE_CONTAINER)) then
+                byTrueFirst(lessHitsThan(5000)) then
+                byTrueFirst(lessHitsThan<Structure>(10000) and isType(STRUCTURE_RAMPART)) then
+                byTrueFirst(lessHitsThan<Structure>(10000) and isType(STRUCTURE_WALL)) then
+                byHits)
+}
+
+val _cachedRepairTargetIds = mutableMapOf<String,MutableList<String>>()
+val _lastSearch = mutableMapOf<String, Int>()
+
+fun Room.getTowerRepairTarget(): Structure? {
+    while (_cachedRepairTargetIds.containsKey(this.name) && _cachedRepairTargetIds[this.name] != null &&
+            _cachedRepairTargetIds[this.name]!!.isNotEmpty()) {
+        val id = _cachedRepairTargetIds[this.name]!!.first()
+        val structure = Game.getObjectById<Structure>(id)
+        if (structure == null || !repairStructureFilter(structure)) {
+            _cachedRepairTargetIds[this.name]!!.remove(id)
+            continue
+        }
+        return structure
+    }
+    if (_lastSearch.contains(this.name) && Game.time - _lastSearch[this.name]!! < 10) return null
+    console.log("Searching for new repair targets in ${this.name}")
+    _lastSearch[this.name] = Game.time
+    val targets = this.findTowerRepairTargets(10)
+    _cachedRepairTargetIds[this.name] = targets.map { it.id }.toMutableList()
+    return targets.firstOrNull()
+}
+
 
 val SOURCE_BUFFER = "SOURCE_BUFFER"
 val CONTROLLER_BUFFER = "CONTROLLER_BUFFER"
