@@ -99,7 +99,9 @@ var Memory.visualizeRepairs: Boolean by memory { false }
 var Memory.visualizeDyingCreeps: Boolean by memory { true }
 
 var Memory.outputCPUUsage: Boolean by memory { false }
+var Memory.outputCreepCPUUsage: Boolean by memory { false }
 var Memory.visualizeCPUUsage: Boolean by memory { false }
+var Memory.outputStructureCache: Boolean by memory { false }
 
 var Memory.enableVisualizations: Boolean by memory { false }
 var Memory.visualizeGraphs: Boolean by memory { false }

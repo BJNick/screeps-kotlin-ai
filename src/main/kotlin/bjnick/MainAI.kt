@@ -8,6 +8,8 @@ import ignorePlayers
 import lastTripDuration
 import org.w3c.dom.Text
 import outputCPUUsage
+import outputCreepCPUUsage
+import outputStructureCache
 import prospectedCount
 import recordData
 import role
@@ -33,13 +35,34 @@ class ProgressState {
 fun gameLoop() {
 
     val mainSpawn: StructureSpawn = Game.spawns.values.firstOrNull() ?: return
+    var cpuBegin = Game.cpu.getUsed()
+
+    if (Memory.outputCPUUsage) {
+        console.log("///////////////////////////")
+        console.log("Parsing CPU: ${Game.cpu.getUsed() - cpuBegin}")
+    }
+    cpuBegin = Game.cpu.getUsed()
+
+    val cpuInitial = Game.cpu.getUsed()
 
     Game.rooms.values.forEach {
         defendRoom(it)
     }
+    
+    // Defence CPU
+    if (Memory.outputCPUUsage) {
+        console.log("Defence CPU: ${Game.cpu.getUsed() - cpuBegin}")
+    }
+    cpuBegin = Game.cpu.getUsed()
 
     //delete memories of creeps that have passed away
     houseKeeping(Game.creeps)
+
+    // Housekeeping CPU
+    if (Memory.outputCPUUsage) {
+        console.log("Housekeeping CPU: ${Game.cpu.getUsed() - cpuBegin}")
+    }
+    cpuBegin = Game.cpu.getUsed()
 
     // just an example of how to use room memory
     //mainSpawn.room.memory.numberOfCreeps = mainSpawn.room.find(FIND_CREEPS).count()
@@ -48,6 +71,12 @@ fun gameLoop() {
 
     //make sure we have at least some creeps
     spawnCreeps(Game.creeps.values, mainSpawn)
+
+    if (Memory.outputCPUUsage) {
+        console.log("Spawn CPU: ${Game.cpu.getUsed() - cpuBegin}")
+    }
+    cpuBegin = Game.cpu.getUsed()
+
     // TODO DOES NOT WORK
     /*if (mainSpawn.spawning != null) {
         // SECONDARY SPAWN
@@ -67,16 +96,21 @@ fun gameLoop() {
             continue
         }
         // MEASURE PERFORMANCE
-        if (Memory.visualizeCPUUsage || Memory.outputCPUUsage) {
+        if (Memory.visualizeCPUUsage || Memory.outputCreepCPUUsage) {
             val after = Game.cpu.getUsed()
             cpuUsage.add("${after - before} is the usage of |${creep.name}| with role ${creep.memory.role}")
         }
     }
 
-    // Show CPU usage
+    // Show total Creep CPU usage
     if (Memory.outputCPUUsage) {
+        console.log("Creep CPU: ${Game.cpu.getUsed() - cpuBegin}")
+    }
+    cpuBegin = Game.cpu.getUsed()
+
+    // Show CPU usage
+    if (Memory.outputCreepCPUUsage) {
         cpuUsage.sort()
-        console.log("///////////////////////////")
         cpuUsage.takeLast(10).forEach { console.log(it) }
     }
     // Or Visualize CPU usage on each creep
@@ -91,7 +125,7 @@ fun gameLoop() {
     }
 
     // Start post processing
-    val cpuBegin = Game.cpu.getUsed()
+    cpuBegin = Game.cpu.getUsed()
 
     if (Memory.forceReassignSources) {
         for ((creepName, _) in Memory.creeps) {
@@ -192,9 +226,15 @@ fun gameLoop() {
             recordGraph(it, 15, 15.0, y, showVis = Memory.visualizeGraphs && Memory.enableVisualizations && !saveCPU)
     }
 
+    if (Memory.outputStructureCache)
+        cacheStatus()
+
     // Show CPU usage
-    if (Memory.outputCPUUsage)
+    if (Memory.outputCPUUsage) {
         console.log("Post-Processing CPU: ${Game.cpu.getUsed() - cpuBegin}")
+        console.log("Main Loop CPU: ${Game.cpu.getUsed() - cpuInitial}")
+        console.log("Total CPU: ${Game.cpu.getUsed()}")
+    }
 
     // Send notification if CPU bucket is low
     if (Game.cpu.bucket < 8000) {
@@ -276,15 +316,12 @@ fun defendRoom(room: Room) {
     } else if (damagedCreeps.isNotEmpty()) {
         towers.forEach { tower -> tower.heal(damagedCreeps[0]) }
     } else {
-        towers.forEach {
-            val repairTarget = it.findTowerRepairTarget(500) ?:
-                it.findTowerRepairTarget(30000, STRUCTURE_CONTAINER) ?:
-                it.findTowerRepairTarget(5000) ?:
-                it.findTowerRepairTarget(10000, STRUCTURE_RAMPART) ?:
-                it.findTowerRepairTarget(10000, STRUCTURE_WALL)
-            if (repairTarget != null)
-                it.repair(repairTarget)
-        }
+        val beginCPU = Game.cpu.getUsed()
+        val repairTarget = room.getTowerRepairTarget()
+        if (repairTarget != null) // all towers repair the same target
+            towers.forEach { it.repair(repairTarget) }
+        if (Memory.outputCPUUsage) // TODO Collapse this into a single print
+            console.log("Tower Repair CPU: ${Game.cpu.getUsed() - beginCPU}")
     }
 }
 
