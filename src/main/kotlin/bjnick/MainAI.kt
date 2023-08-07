@@ -311,7 +311,9 @@ fun defendRoom(room: Room) {
         if (!(Memory.ignorePlayers.contains(username)))
             towers.forEach { tower -> tower.attack(hostiles[0]) }
         // ACTIVATE SAFE MODE
-        if (!areInvaders && room.controller?.safeModeAvailable > 0)
+        val spawn = room.find(FIND_MY_SPAWNS).firstOrNull()
+        val hostilesTooFarIn = hostiles.filter { it.pos.getRangeTo(room.controller!!.pos) < 5 || (spawn?.pos?.getRangeTo(it.pos) ?: 10) < 5 }
+        if (!areInvaders && hostilesTooFarIn.isNotEmpty() && room.controller?.safeModeAvailable > 0)
             room.controller?.activateSafeMode()
     } else if (damagedCreeps.isNotEmpty()) {
         towers.forEach { tower -> tower.heal(damagedCreeps[0]) }
