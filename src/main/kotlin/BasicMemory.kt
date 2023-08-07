@@ -1,4 +1,5 @@
 
+import bjnick.IntentType
 import screeps.api.*
 import screeps.utils.memory.memory
 
@@ -43,6 +44,11 @@ val FLAG_DISTRIBUTING = 2
 var CreepMemory.collectingFlag: Int by memory { FLAG_IGNORE }
 
 var CreepMemory.mineralType: String by memory { "" }
+
+var CreepMemory.intentType: Int by memory { 0 }
+var CreepMemory.intentID: String by memory { "" }
+var CreepMemory.intentPos: AbstractPos by memory { AbstractPos(0, 0, "") }
+var CreepMemory.intentResourceType: ResourceConstant by memory { RESOURCE_ENERGY }
 
 /* Rest of the persistent memory structures.
 * These set an unused test variable to 0. This is done to illustrate the how to add variables to

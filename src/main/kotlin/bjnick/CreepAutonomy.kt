@@ -172,8 +172,9 @@ fun Creep.collectFromClosest(fromRoom: Room = this.room) {
 }
 
 
-fun Creep.collectEnergyFrom(target: HasPosition?) {
+fun Creep.collectEnergyFrom(target: HasPosition?, setIntent: Boolean = true) {
     if (target == null) return
+
 
     @Suppress("UNCHECKED_CAST_TO_EXTERNAL_INTERFACE")
     val err = when (target) {
@@ -188,9 +189,15 @@ fun Creep.collectEnergyFrom(target: HasPosition?) {
     }
 
     moveIfNotInRange(target, err, "collectEnergyFrom")
+
+    if (err != ERR_NOT_IN_RANGE) {
+        console.log("$name got $err while collectEnergy, resetting intent")
+        this.resetCachedIntent() // Could not accomplish intent, reset and re-evaluate
+    } else if (setIntent)
+        this.setCachedIntent(IntentType.CollectEnergy, target.unsafeCast<Identifiable>().id, target.pos)
 }
 
-fun Creep.collectResourceFrom(target: HasPosition?, resource: ResourceConstant) {
+fun Creep.collectResourceFrom(target: HasPosition?, resource: ResourceConstant, setIntent: Boolean = true) {
     if (target == null) return
 
     @Suppress("UNCHECKED_CAST_TO_EXTERNAL_INTERFACE")
@@ -206,28 +213,33 @@ fun Creep.collectResourceFrom(target: HasPosition?, resource: ResourceConstant) 
     }
 
     moveIfNotInRange(target, err, "collectResourceFrom")
+
+    if (err != ERR_NOT_IN_RANGE) {
+        this.resetCachedIntent() // Could not accomplish intent, reset and re-evaluate
+    } else if (setIntent)
+        this.setCachedIntent(IntentType.CollectResource, target.unsafeCast<Identifiable>().id, target.pos, resource)
 }
 
 // TODO: Consider overloads for different types of structures
 /**
  * Puts energy into the specified structure
  */
-fun Creep.putEnergy(target: HasPosition?) {
-
+fun Creep.putEnergy(target: HasPosition?, setIntent: Boolean = true) {
     if (target == null)
         return
 
     if (target !is Structure && target !is ConstructionSite && target !is Creep)
         return logError("putEnergy: target $target is not a Structure, Creep or ConstructionSite")
 
+
     @Suppress("UNCHECKED_CAST_TO_EXTERNAL_INTERFACE")
     val err = when (target) {
 
         is StructureController -> {
             // Move as close as possible TODO doesnt work
-            val e = upgradeController(target)
-            if (e == OK && target.pos.getRangeTo(this.pos) > 1) ERR_NOT_IN_RANGE
-            e
+            /*val e =*/ upgradeController(target)
+            //if (e == OK && target.pos.getRangeTo(this.pos) > 1) ERR_NOT_IN_RANGE
+            //e
         }
         is ConstructionSite -> build(target)
         is Creep -> fastTransfer(target, RESOURCE_ENERGY)
@@ -237,14 +249,20 @@ fun Creep.putEnergy(target: HasPosition?) {
         is StructureWall -> repair(target)
         is StructureRampart -> repair(target)
 
+        // TODO INVESITGATE CAST FAIL
         else -> if (target as? StoreOwner != null)  fastTransfer(target, RESOURCE_ENERGY) else
             return logError("putEnergy: target $target is of unsupported structure type")
     }
 
     moveIfNotInRange(target, err, "putEnergy into $target")
+
+    if (err != ERR_NOT_IN_RANGE) {
+        this.resetCachedIntent() // Could not accomplish intent, reset and re-evaluate
+    } else if (setIntent)
+        this.setCachedIntent(IntentType.PutEnergy, target.unsafeCast<Identifiable>().id, target.pos)
 }
 
-fun Creep.putResource(target: HasPosition?, type: ResourceConstant) {
+fun Creep.putResource(target: HasPosition?, type: ResourceConstant, setIntent: Boolean = false) {
     if (target == null)
         return
 
@@ -256,11 +274,24 @@ fun Creep.putResource(target: HasPosition?, type: ResourceConstant) {
         else return logError("putResource: target $target is of unsupported structure type")
 
     moveIfNotInRange(target, err, "putResource into $target")
+
+    if (err != ERR_NOT_IN_RANGE) {
+        this.resetCachedIntent() // Could not accomplish intent, reset and re-evaluate
+    } else if (setIntent)
+        this.setCachedIntent(IntentType.PutResource, target.unsafeCast<Identifiable>().id, target.pos, type)
 }
 
-fun Creep.goRepair(target: Structure?): Boolean {
+fun Creep.goRepair(target: Structure?, setIntent: Boolean = true): Boolean {
     if (target == null) return false
-    return moveIfNotInRange(target, repair(target), "goRepair")
+    val err = repair(target)
+    val moved = moveIfNotInRange(target, err, "goRepair")
+
+    if (err != ERR_NOT_IN_RANGE) {
+        this.resetCachedIntent() // Could not accomplish intent, reset and re-evaluate
+    } else if (setIntent)
+        this.setCachedIntent(IntentType.Repair, target.unsafeCast<Identifiable>().id, target.pos)
+
+    return moved
 }
 
 fun Creep.stackToCarriers(): Boolean {

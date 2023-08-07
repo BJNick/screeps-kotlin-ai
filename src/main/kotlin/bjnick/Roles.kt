@@ -6,6 +6,7 @@ import collecting
 import defendRoom
 import distributionCategory
 import homeRoom
+import intentType
 import lastTripDuration
 import lastTripStarted
 import prospectedCount
@@ -40,6 +41,10 @@ fun Creep.executeRole() {
         room.visual.text(memory.role.lowercase().capitalize(), pos.x+0.0, pos.y-1.0, options { color = "#FFFFFF"; font = "0.5"; opacity = 0.75 })
         return
     }
+    if (executeCachedIntent()) {
+        return
+    }
+
     when (memory.role) {
         Role.UNASSIGNED -> console.log("Unassigned role: $name")
         Role.SETTLER -> settler()
